@@ -1,24 +1,26 @@
-const express = require("express");
-const cors = require("cors");
-const db = require("./database");
+import express from 'express';
+import cors from 'cors';
+
+import productRoutes from './routes/productRoutes.js';
+import categoryRoutes from './routes/categoryRoutes.js';
+import supplierRoutes from './routes/supplierRoutes.js';
+import customerRoutes from './routes/customerRoutes.js';
+import purchaseRoutes from './routes/purchaseRoutes.js';
+import saleRoutes from './routes/saleRoutes.js';
+import transactionRoutes from './routes/transactionRoutes.js';
 
 const app = express();
-const PORT = 5000;
-
 app.use(cors());
 app.use(express.json());
 
-// Test route
-app.get("/status", (req, res) => {
-  res.json({ message: "Backend running" });
-});
+// API Routes
+app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/purchases', purchaseRoutes);
+app.use('/api/sales', saleRoutes);
+app.use('/api/transactions', transactionRoutes);
 
-// CRUD Example for products
-app.get("/products", (req, res) => {
-  db.all("SELECT * FROM products", [], (err, rows) => {
-    if (err) res.status(500).json(err);
-    else res.json(rows);
-  });
-});
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const PORT = 4000;
+app.listen(PORT, () => console.log(`✅ Backend running on http://localhost:${PORT}`));
