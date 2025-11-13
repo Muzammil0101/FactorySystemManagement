@@ -10,7 +10,7 @@ const Sidebar = () => {
     { name: "Categories", path: "/categories" },
     { name: "Suppliers", path: "/suppliers" },
     { name: "Profit & Loss", path: "/profit-loss" },
-    { name: "Customers", path: "/customers" },
+    { name: "Customers", path: "/customer" },
   ];
 
   return (
