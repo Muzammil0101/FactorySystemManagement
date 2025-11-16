@@ -186,7 +186,8 @@ export default function StockPage() {
   };
 
   return (
-<div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-6">
+    
+<div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24  px-6 pb-10 -m-3">
       {/* Notification Toast */}
       {notification && (
         <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl transform transition-all duration-300 ${
@@ -547,4 +548,5 @@ export default function StockPage() {
       </div>
     </div>
   );
+  
 }

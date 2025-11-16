@@ -123,7 +123,7 @@ export default function DashboardPage() {
   return (
 
     
-<div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-6">
+<div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-3">
       {/* HEADER */}
       <div className="mb-8">
         <h2 className="text-4xl font-bold text-slate-800 mb-2">Dashboard Overview</h2>

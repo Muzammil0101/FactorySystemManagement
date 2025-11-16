@@ -6,6 +6,16 @@ import { useState } from "react";
 const Navbar = () => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
+  const handleLogout = () => {
+    // Clear authentication data
+    localStorage.removeItem("auth");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("loginTime");
+    
+    // Redirect to login page
+    window.location.href = "/login";
+  };
+
   return (
     <div className="sticky top-0 w-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 shadow-2xl relative overflow-hidden z-50">
       {/* Decorative Background Elements */}
@@ -65,7 +75,10 @@ const Navbar = () => {
           </div>
 
           {/* Logout button */}
-          <button className="group relative px-4 py-2 rounded-xl font-semibold text-white overflow-hidden transition-all duration-300 hover:scale-105 border border-slate-700/50">
+          <button 
+            onClick={handleLogout}
+            className="group relative px-4 py-2 rounded-xl font-semibold text-white overflow-hidden transition-all duration-300 hover:scale-105 border border-slate-700/50"
+          >
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 transition-transform duration-300 group-hover:scale-110"></div>
             <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             <span className="relative flex items-center gap-2 text-sm">
