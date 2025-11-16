@@ -434,7 +434,7 @@ export default function SuppliersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-green-50 p-6">
+<div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-8">
         <div>

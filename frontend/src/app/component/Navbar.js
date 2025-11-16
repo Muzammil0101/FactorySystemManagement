@@ -7,7 +7,7 @@ const Navbar = () => {
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   return (
-    <div className="w-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 shadow-2xl relative overflow-hidden">
+    <div className="sticky top-0 w-full bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 shadow-2xl relative overflow-hidden z-50">
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full opacity-10">
         <div className="absolute top-0 left-20 w-32 h-32 bg-blue-500 rounded-full blur-3xl"></div>
