@@ -1,37 +1,73 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Package, Users, Truck, DollarSign, TrendingUp, TrendingDown, Folder } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, BarChart, Bar } from "recharts";
+import { Package, Users, Truck, Folder, TrendingUp, TrendingDown } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
   const [stockIn, setStockIn] = useState([]);
   const [stockOut, setStockOut] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, currentStock: 0 });
+
+  const API_BASE = "http://localhost:4000/api";
 
   useEffect(() => {
-    const stockInData = JSON.parse(localStorage.getItem("stock-in") || "[]");
-    const stockOutData = JSON.parse(localStorage.getItem("stock-out") || "[]");
-    const customersData = JSON.parse(localStorage.getItem("customers") || "[]");
-    const suppliersData = JSON.parse(localStorage.getItem("suppliers") || "[]");
-    const categoriesData = JSON.parse(localStorage.getItem("categories") || "[]");
-
-    setStockIn(stockInData);
-    setStockOut(stockOutData);
-    setCustomers(customersData);
-    setSuppliers(suppliersData);
-    setCategories(categoriesData);
+    fetchAllData();
   }, []);
 
-  // Calculate stats
-  const totalStockIn = stockIn.reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
-  const totalStockOut = stockOut.reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
-  const currentStock = totalStockIn - totalStockOut;
+  const fetchAllData = async () => {
+    setLoading(true);
+    try {
+      const [customersRes, suppliersRes, categoriesRes, stockRes] = await Promise.all([
+        fetch(`${API_BASE}/customers`),
+        fetch(`${API_BASE}/suppliers`),
+        fetch(`${API_BASE}/stock/categories`),
+        fetch(`${API_BASE}/stock/summary`)
+      ]);
 
-  const totalRevenue = stockOut.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-  const totalCost = stockIn.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-  const totalProfit = totalRevenue - totalCost;
+      const [customersData, suppliersData, categoriesData, stockData] = await Promise.all([
+        customersRes.json(),
+        suppliersRes.json(),
+        categoriesRes.json(),
+        stockRes.json()
+      ]);
+
+      // Fetch purchases (stock in) and sales (stock out)
+      const [purchasesRes, salesRes] = await Promise.all([
+        fetch(`${API_BASE}/stock/stock-in`),
+        fetch(`${API_BASE}/stock/stock-out`)
+      ]);
+
+      const [purchasesData, salesData] = await Promise.all([
+        purchasesRes.json(),
+        salesRes.json()
+      ]);
+
+      setStockIn(purchasesData || []);
+      setStockOut(salesData || []);
+      setCustomers(customersData || []);
+      setSuppliers(suppliersData || []);
+      setCategories(categoriesData || []);
+      setSummary({
+        totalIn: stockData.totalStockIn || 0,
+        totalOut: stockData.totalStockOut || 0,
+        currentStock: stockData.currentStock || 0
+      });
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Calculate stats
+  const currentStock = summary.currentStock || 0;
+  const totalSuppliers = suppliers.length;
+  const totalCustomers = customers.length;
+  const totalCategories = categories.length;
 
   // Cards data
   const stats = [
@@ -45,27 +81,27 @@ export default function DashboardPage() {
     },
     { 
       title: "Total Suppliers", 
-      value: suppliers.length.toString(), 
+      value: totalSuppliers.toString(), 
       icon: Truck,
       gradient: "from-green-500 to-emerald-600",
-      change: "+3",
+      change: `${totalSuppliers} active`,
       changeType: "up"
     },
     { 
       title: "Total Customers", 
-      value: customers.length.toString(), 
+      value: totalCustomers.toString(), 
       icon: Users,
       gradient: "from-yellow-500 to-orange-600",
-      change: "+8",
+      change: `${totalCustomers} active`,
       changeType: "up"
     },
     { 
-      title: "Total Profit", 
-      value: `Rs. ${totalProfit.toFixed(0)}`, 
-      icon: DollarSign,
+      title: "Total Categories", 
+      value: totalCategories.toString(), 
+      icon: Folder,
       gradient: "from-purple-500 to-pink-600",
-      change: totalProfit >= 0 ? "+15.3%" : "-5.2%",
-      changeType: totalProfit >= 0 ? "up" : "down"
+      change: `${totalCategories} types`,
+      changeType: "up"
     },
   ];
 
@@ -73,24 +109,32 @@ export default function DashboardPage() {
   const getMonthlyData = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
     const data = [];
 
     for (let i = 5; i >= 0; i--) {
       const monthIndex = (currentMonth - i + 12) % 12;
+      const year = currentMonth - i < 0 ? currentYear - 1 : currentYear;
       const monthName = months[monthIndex];
       
       const monthStockIn = stockIn
-        .filter(item => new Date(item.date).getMonth() === monthIndex)
-        .reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
+        .filter(item => {
+          const itemDate = new Date(item.date || item.purchase_date);
+          return itemDate.getMonth() === monthIndex && itemDate.getFullYear() === year;
+        })
+        .reduce((sum, item) => sum + parseFloat(item.weight || item.quantity || 0), 0);
       
       const monthStockOut = stockOut
-        .filter(item => new Date(item.date).getMonth() === monthIndex)
-        .reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
+        .filter(item => {
+          const itemDate = new Date(item.date || item.sale_date);
+          return itemDate.getMonth() === monthIndex && itemDate.getFullYear() === year;
+        })
+        .reduce((sum, item) => sum + parseFloat(item.weight || item.quantity || 0), 0);
 
       data.push({
         month: monthName,
-        stockIn: monthStockIn,
-        stockOut: monthStockOut
+        stockIn: parseFloat(monthStockIn.toFixed(2)),
+        stockOut: parseFloat(monthStockOut.toFixed(2))
       });
     }
 
@@ -99,20 +143,12 @@ export default function DashboardPage() {
 
   // Category distribution data
   const getCategoryData = () => {
-    return categories.map(cat => {
-      const inStock = stockIn
-        .filter(item => item.description === cat.name)
-        .reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
-      
-      const outStock = stockOut
-        .filter(item => item.description === cat.name)
-        .reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
-
-      return {
+    return categories
+      .map(cat => ({
         name: cat.name,
-        value: inStock - outStock
-      };
-    }).filter(item => item.value > 0);
+        value: parseFloat(cat.current_stock || cat.currentStock || 0)
+      }))
+      .filter(item => item.value > 0);
   };
 
   const monthlyData = getMonthlyData();
@@ -120,10 +156,19 @@ export default function DashboardPage() {
 
   const COLORS = ["#3B82F6", "#22C55E", "#EAB308", "#8B5CF6", "#EC4899", "#F97316"];
 
-  return (
+  if (loading) {
+    return (
+      <div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-3 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-slate-600 text-lg">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
 
-    
-<div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-3">
+  return (
+    <div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-3">
       {/* HEADER */}
       <div className="mb-8">
         <h2 className="text-4xl font-bold text-slate-800 mb-2">Dashboard Overview</h2>
@@ -134,7 +179,7 @@ export default function DashboardPage() {
 
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((item, index) => (
+        {stats.map((item) => (
           <div
             key={item.title}
             className="bg-white/40 backdrop-blur-lg border border-white/50 rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group hover:bg-white/50"
@@ -190,7 +235,6 @@ export default function DashboardPage() {
                   backdropFilter: 'blur(10px)'
                 }}
               />
-              <Legend />
               <Line
                 type="monotone"
                 dataKey="stockIn"
@@ -246,7 +290,7 @@ export default function DashboardPage() {
                     borderRadius: '12px',
                     backdropFilter: 'blur(10px)'
                   }}
-                  formatter={(value) => `${value.toFixed(2)} kg`}
+                  formatter={(value) => `${Number(value).toFixed(2)} kg`}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -271,8 +315,8 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {suppliers.slice(0, 5).map((supplier, idx) => {
               const supplierTotal = stockIn
-                .filter(item => item.supplier === supplier.name)
-                .reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
+                .filter(item => item.supplier === supplier.name || item.supplier_name === supplier.name)
+                .reduce((sum, item) => sum + parseFloat(item.weight || item.quantity || 0), 0);
               
               return (
                 <div key={supplier.id} className="flex items-center justify-between p-3 bg-white/50 backdrop-blur-sm rounded-xl border border-white/60">
@@ -303,8 +347,8 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {customers.slice(0, 5).map((customer, idx) => {
               const customerTotal = stockOut
-                .filter(item => item.customer === customer.name)
-                .reduce((sum, item) => sum + parseFloat(item.weight || 0), 0);
+                .filter(item => item.customer === customer.name || item.customer_name === customer.name)
+                .reduce((sum, item) => sum + parseFloat(item.weight || item.quantity || 0), 0);
               
               return (
                 <div key={customer.id} className="flex items-center justify-between p-3 bg-white/50 backdrop-blur-sm rounded-xl border border-white/60">
@@ -335,15 +379,15 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
               <p className="text-sm text-slate-600 mb-1">Total Categories</p>
-              <p className="text-2xl font-bold text-blue-700">{categories.length}</p>
+              <p className="text-2xl font-bold text-blue-700">{totalCategories}</p>
             </div>
             <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
               <p className="text-sm text-slate-600 mb-1">Total Stock In</p>
-              <p className="text-2xl font-bold text-green-700">{totalStockIn.toFixed(2)} kg</p>
+              <p className="text-2xl font-bold text-green-700">{summary.totalIn.toFixed(2)} kg</p>
             </div>
             <div className="p-4 bg-gradient-to-r from-red-50 to-rose-50 rounded-xl border border-red-200">
               <p className="text-sm text-slate-600 mb-1">Total Stock Out</p>
-              <p className="text-2xl font-bold text-red-700">{totalStockOut.toFixed(2)} kg</p>
+              <p className="text-2xl font-bold text-red-700">{summary.totalOut.toFixed(2)} kg</p>
             </div>
           </div>
         </div>

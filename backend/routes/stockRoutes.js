@@ -1,265 +1,457 @@
-import express from 'express';
-import db from '../database/database.js';
+import express from "express";
+import db from "../database/database.js";
 
 const router = express.Router();
 
-// ============ STOCK IN ROUTES ============
+/* ======================================================
+                DEBUG ROUTES
+====================================================== */
 
-// Get all stock in records
-router.get('/stock-in', (req, res) => {
+router.get("/debug/stock-data", (req, res) => {
   try {
-    const stockIn = db.prepare('SELECT * FROM stock_in ORDER BY date DESC').all();
+    const stockInItems = db.prepare("SELECT id, description, weight FROM stock_in").all();
+    const stockOutItems = db.prepare("SELECT id, description, weight FROM stock_out").all();
+    const categories = db.prepare("SELECT id, name FROM categories").all();
+
+    res.json({
+      categories,
+      stockInItems,
+      stockOutItems,
+      message: "Check if category names match stock descriptions exactly",
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/* ======================================================
+                CATEGORY ROUTES
+====================================================== */
+
+router.get("/categories", (req, res) => {
+  try {
+    const categories = db.prepare("SELECT * FROM categories ORDER BY name ASC").all();
+
+    const categoriesWithStock = categories.map((cat) => {
+      // Use exact match instead of LIKE for better accuracy
+      const stockInData = db
+        .prepare(`
+          SELECT COALESCE(SUM(CAST(weight AS REAL)), 0) AS total
+          FROM stock_in 
+          WHERE LOWER(TRIM(description)) = LOWER(TRIM(?))
+      `)
+        .get(cat.name);
+
+      const stockOutData = db
+        .prepare(`
+          SELECT COALESCE(SUM(CAST(weight AS REAL)), 0) AS total
+          FROM stock_out 
+          WHERE LOWER(TRIM(description)) = LOWER(TRIM(?))
+      `)
+        .get(cat.name);
+
+      const stockIn = parseFloat(stockInData.total) || 0;
+      const stockOut = parseFloat(stockOutData.total) || 0;
+
+      return {
+        ...cat,
+        stockIn,
+        stockOut,
+        currentStock: stockIn - stockOut,
+      };
+    });
+
+    res.json(categoriesWithStock);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add category
+router.post("/categories", (req, res) => {
+  const { name, description } = req.body;
+
+  try {
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Category name is required" });
+    }
+
+    const existing = db.prepare("SELECT * FROM categories WHERE name = ?").get(name);
+    if (existing) {
+      return res.status(400).json({ error: "Category already exists" });
+    }
+
+    const result = db
+      .prepare(`
+        INSERT INTO categories (name, description)
+        VALUES (?, ?)
+    `)
+      .run(name, description || "");
+
+    const newCategory = db.prepare("SELECT * FROM categories WHERE id = ?").get(result.lastInsertRowid);
+
+    res.json({
+      success: true,
+      message: `Category "${name}" added successfully`,
+      data: {
+        ...newCategory,
+        stockIn: 0,
+        stockOut: 0,
+        currentStock: 0,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update category
+router.put("/categories/:id", (req, res) => {
+  const { id } = req.params;
+  const { name, description } = req.body;
+
+  try {
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Category name is required" });
+    }
+
+    const existing = db.prepare("SELECT * FROM categories WHERE id = ?").get(id);
+    if (!existing) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    const duplicate = db.prepare("SELECT * FROM categories WHERE name = ? AND id != ?").get(name, id);
+    if (duplicate) {
+      return res.status(400).json({ error: "Another category with this name already exists" });
+    }
+
+    db.prepare(
+      `
+      UPDATE categories
+      SET name = ?, description = ?
+      WHERE id = ?
+    `
+    ).run(name, description || "", id);
+
+    const updated = db.prepare("SELECT * FROM categories WHERE id = ?").get(id);
+
+    const stockInData = db
+      .prepare(`
+        SELECT SUM(weight) as total 
+        FROM stock_in 
+        WHERE description = ?
+    `)
+      .get(updated.name);
+
+    const stockOutData = db
+      .prepare(`
+        SELECT SUM(weight) as total 
+        FROM stock_out 
+        WHERE description = ?
+    `)
+      .get(updated.name);
+
+    res.json({
+      success: true,
+      message: "Category updated successfully",
+      data: {
+        ...updated,
+        stockIn: stockInData.total || 0,
+        stockOut: stockOutData.total || 0,
+        currentStock: (stockInData.total || 0) - (stockOutData.total || 0),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete category
+router.delete("/categories/:id", (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const category = db.prepare("SELECT * FROM categories WHERE id = ?").get(id);
+    if (!category) {
+      return res.status(404).json({ error: "Category not found" });
+    }
+
+    const inStockIn = db.prepare("SELECT COUNT(*) as count FROM stock_in WHERE description = ?").get(category.name);
+    const inStockOut = db.prepare("SELECT COUNT(*) as count FROM stock_out WHERE description = ?").get(category.name);
+
+    if (inStockIn.count > 0 || inStockOut.count > 0) {
+      return res.status(400).json({
+        error: `Cannot delete "${category.name}" because it is in use`,
+      });
+    }
+
+    db.prepare("DELETE FROM categories WHERE id = ?").run(id);
+
+    res.json({
+      success: true,
+      message: `Category "${category.name}" deleted successfully`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/* ======================================================
+                STOCK IN ROUTES
+====================================================== */
+
+router.get("/stock-in", (req, res) => {
+  try {
+    const stockIn = db.prepare("SELECT * FROM stock_in ORDER BY date DESC").all();
     res.json(stockIn);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Add stock in
-router.post('/stock-in', (req, res) => {
+// Add Stock In
+router.post("/stock-in", (req, res) => {
   const { date, description, weight, rate, amount, supplier } = req.body;
 
   try {
-    // Validate required fields
     if (!date || !description || !weight || !rate || !supplier) {
-      return res.status(400).json({ error: 'All fields are required' });
+      return res.status(400).json({ error: "All fields are required" });
     }
 
-    if (parseFloat(weight) <= 0) {
-      return res.status(400).json({ error: 'Weight must be greater than 0' });
-    }
-
-    // Insert stock in record
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       INSERT INTO stock_in (date, description, weight, rate, amount, supplier)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(date, description, weight, rate, amount, supplier);
+    `
+      )
+      .run(date, description, weight, rate, amount, supplier);
 
-    // Auto-create category if doesn't exist
-    try {
-      db.prepare(`
-        INSERT OR IGNORE INTO categories (name, description)
-        VALUES (?, '')
-      `).run(description);
-    } catch (e) {
-      console.log('Category already exists or error:', e.message);
-    }
+    // Auto-create category if not found
+    db.prepare(
+      `
+      INSERT OR IGNORE INTO categories (name, description)
+      VALUES (?, '')
+    `
+    ).run(description);
 
-    // Check if supplier exists, if not create
-    const existingSupplier = db.prepare('SELECT * FROM suppliers WHERE name = ?').get(supplier);
-    
+    // Auto-create supplier
+    const existingSupplier = db.prepare("SELECT * FROM suppliers WHERE name = ?").get(supplier);
     if (!existingSupplier) {
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO suppliers (name, phone, city)
         VALUES (?, '', '')
-      `).run(supplier);
+      `
+      ).run(supplier);
     }
 
-    // Add to supplier ledger
-    db.prepare(`
+    // Ledger entry
+    db.prepare(
+      `
       INSERT INTO supplier_ledger (supplier_name, date, description, weight, rate, debit, credit)
       VALUES (?, ?, ?, ?, ?, 0, ?)
-    `).run(supplier, date, description, weight, rate, amount);
+    `
+    ).run(supplier, date, description, weight, rate, amount);
 
-    const newRecord = db.prepare('SELECT * FROM stock_in WHERE id = ?').get(result.lastInsertRowid);
-    
+    const newRecord = db.prepare("SELECT * FROM stock_in WHERE id = ?").get(result.lastInsertRowid);
+
     res.json({
       success: true,
-      message: `Successfully added ${weight} kg of ${description} from ${supplier}`,
-      data: newRecord
+      message: `Added ${weight} kg of ${description}`,
+      data: newRecord,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Delete stock in record
-router.delete('/stock-in/:id', (req, res) => {
+// Delete Stock In
+router.delete("/stock-in/:id", (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Get the record first to update ledger
-    const record = db.prepare('SELECT * FROM stock_in WHERE id = ?').get(id);
-    
+
+    const record = db.prepare("SELECT * FROM stock_in WHERE id = ?").get(id);
     if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
+      return res.status(404).json({ error: "Record not found" });
     }
 
-    // Delete from stock_in
-    db.prepare('DELETE FROM stock_in WHERE id = ?').run(id);
-    
-    // Delete corresponding ledger entry
-    db.prepare(`
-      DELETE FROM supplier_ledger 
+    db.prepare("DELETE FROM stock_in WHERE id = ?").run(id);
+
+    db.prepare(
+      `
+      DELETE FROM supplier_ledger
       WHERE supplier_name = ? AND date = ? AND description = ? AND credit = ?
       ORDER BY id DESC LIMIT 1
-    `).run(record.supplier, record.date, record.description, record.amount);
+    `
+    ).run(record.supplier, record.date, record.description, record.amount);
 
-    res.json({ success: true, message: 'Stock in record deleted' });
+    res.json({ success: true, message: "Stock in record deleted" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// ============ STOCK OUT ROUTES ============
+/* ======================================================
+                STOCK OUT ROUTES
+====================================================== */
 
-// Get all stock out records
-router.get('/stock-out', (req, res) => {
+router.get("/stock-out", (req, res) => {
   try {
-    const stockOut = db.prepare('SELECT * FROM stock_out ORDER BY date DESC').all();
+    const stockOut = db.prepare("SELECT * FROM stock_out ORDER BY date DESC").all();
     res.json(stockOut);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Add stock out
-router.post('/stock-out', (req, res) => {
+// Add Stock Out
+router.post("/stock-out", (req, res) => {
   const { date, description, weight, rate, amount, customer } = req.body;
 
   try {
-    // Validate required fields
     if (!date || !description || !weight || !rate || !customer) {
-      return res.status(400).json({ error: 'All fields are required' });
+      return res.status(400).json({ error: "All fields are required" });
     }
 
-    if (parseFloat(weight) <= 0) {
-      return res.status(400).json({ error: 'Weight must be greater than 0' });
-    }
+    const totalIn = db.prepare("SELECT SUM(weight) as total FROM stock_in").get();
+    const totalOut = db.prepare("SELECT SUM(weight) as total FROM stock_out").get();
 
-    // Calculate current stock
-    const totalIn = db.prepare('SELECT SUM(weight) as total FROM stock_in').get();
-    const totalOut = db.prepare('SELECT SUM(weight) as total FROM stock_out').get();
     const currentStock = (totalIn.total || 0) - (totalOut.total || 0);
 
     if (parseFloat(weight) > currentStock) {
-      return res.status(400).json({ 
-        error: `Not enough stock! Available: ${currentStock.toFixed(2)} kg` 
+      return res.status(400).json({
+        error: `Not enough stock! Available: ${currentStock.toFixed(2)} kg`,
       });
     }
 
-    // Insert stock out record
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       INSERT INTO stock_out (date, description, weight, rate, amount, customer)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(date, description, weight, rate, amount, customer);
+    `
+      )
+      .run(date, description, weight, rate, amount, customer);
 
-    // Auto-create category if doesn't exist
-    try {
-      db.prepare(`
-        INSERT OR IGNORE INTO categories (name, description)
-        VALUES (?, '')
-      `).run(description);
-    } catch (e) {
-      console.log('Category already exists or error:', e.message);
-    }
+    // Auto-create category
+    db.prepare(
+      `
+      INSERT OR IGNORE INTO categories (name, description)
+      VALUES (?, '')
+    `
+    ).run(description);
 
-    // Check if customer exists, if not create
-    const existingCustomer = db.prepare('SELECT * FROM customers WHERE name = ?').get(customer);
-    
+    // Auto-create customer
+    const existingCustomer = db.prepare("SELECT * FROM customers WHERE name = ?").get(customer);
     if (!existingCustomer) {
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO customers (name, phone, city)
         VALUES (?, '', '')
-      `).run(customer);
+      `
+      ).run(customer);
     }
 
-    // Add to customer ledger
-    db.prepare(`
+    // Ledger entry
+    db.prepare(
+      `
       INSERT INTO customer_ledger (customer_name, date, description, weight, rate, debit, credit)
       VALUES (?, ?, ?, ?, ?, ?, 0)
-    `).run(customer, date, description, weight, rate, amount);
+    `
+    ).run(customer, date, description, weight, rate, amount);
 
-    const newRecord = db.prepare('SELECT * FROM stock_out WHERE id = ?').get(result.lastInsertRowid);
-    
+    const newRecord = db.prepare("SELECT * FROM stock_out WHERE id = ?").get(result.lastInsertRowid);
+
     res.json({
       success: true,
-      message: `Successfully sold ${weight} kg of ${description} to ${customer}`,
-      data: newRecord
+      message: `Sold ${weight} kg of ${description}`,
+      data: newRecord,
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Delete stock out record
-router.delete('/stock-out/:id', (req, res) => {
+// Delete Stock Out
+router.delete("/stock-out/:id", (req, res) => {
   try {
     const { id } = req.params;
-    
-    // Get the record first to update ledger
-    const record = db.prepare('SELECT * FROM stock_out WHERE id = ?').get(id);
-    
+
+    const record = db.prepare("SELECT * FROM stock_out WHERE id = ?").get(id);
     if (!record) {
-      return res.status(404).json({ error: 'Record not found' });
+      return res.status(404).json({ error: "Record not found" });
     }
 
-    // Delete from stock_out
-    db.prepare('DELETE FROM stock_out WHERE id = ?').run(id);
-    
-    // Delete corresponding ledger entry
-    db.prepare(`
-      DELETE FROM customer_ledger 
+    db.prepare("DELETE FROM stock_out WHERE id = ?").run(id);
+
+    db.prepare(
+      `
+      DELETE FROM customer_ledger
       WHERE customer_name = ? AND date = ? AND description = ? AND debit = ?
       ORDER BY id DESC LIMIT 1
-    `).run(record.customer, record.date, record.description, record.amount);
+    `
+    ).run(record.customer, record.date, record.description, record.amount);
 
-    res.json({ success: true, message: 'Stock out record deleted' });
+    res.json({ success: true, message: "Stock out record deleted" });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// ============ STOCK SUMMARY ROUTES ============
+/* ======================================================
+                SUMMARY ROUTES
+====================================================== */
 
-// Get current stock summary
-router.get('/summary', (req, res) => {
+router.get("/summary", (req, res) => {
   try {
-    const totalIn = db.prepare('SELECT SUM(weight) as total FROM stock_in').get();
-    const totalOut = db.prepare('SELECT SUM(weight) as total FROM stock_out').get();
-    
-    const stockInTotal = totalIn.total || 0;
-    const stockOutTotal = totalOut.total || 0;
-    const currentStock = stockInTotal - stockOutTotal;
+    const totalIn = db.prepare("SELECT SUM(weight) as total FROM stock_in").get();
+    const totalOut = db.prepare("SELECT SUM(weight) as total FROM stock_out").get();
 
     res.json({
-      totalIn: stockInTotal,
-      totalOut: stockOutTotal,
-      currentStock: currentStock
+      totalIn: totalIn.total || 0,
+      totalOut: totalOut.total || 0,
+      currentStock: (totalIn.total || 0) - (totalOut.total || 0),
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get stock by category/description
-router.get('/by-category', (req, res) => {
+/* ======================================================
+          STOCK BY CATEGORY
+====================================================== */
+
+router.get("/by-category", (req, res) => {
   try {
-    const stockInByCategory = db.prepare(`
-      SELECT description, SUM(weight) as total_in
-      FROM stock_in
-      GROUP BY description
-    `).all();
+    const stockInByCategory = db
+      .prepare(`
+        SELECT description, SUM(weight) AS total_in
+        FROM stock_in
+        GROUP BY description
+    `)
+      .all();
 
-    const stockOutByCategory = db.prepare(`
-      SELECT description, SUM(weight) as total_out
-      FROM stock_out
-      GROUP BY description
-    `).all();
+    const stockOutByCategory = db
+      .prepare(`
+        SELECT description, SUM(weight) AS total_out
+        FROM stock_out
+        GROUP BY description
+    `)
+      .all();
 
-    // Merge data
     const categoryMap = {};
 
-    stockInByCategory.forEach(item => {
+    stockInByCategory.forEach((item) => {
       categoryMap[item.description] = {
         description: item.description,
         stockIn: item.total_in,
         stockOut: 0,
-        currentStock: item.total_in
+        currentStock: item.total_in,
       };
     });
 
-    stockOutByCategory.forEach(item => {
+    stockOutByCategory.forEach((item) => {
       if (categoryMap[item.description]) {
         categoryMap[item.description].stockOut = item.total_out;
         categoryMap[item.description].currentStock -= item.total_out;
@@ -268,7 +460,7 @@ router.get('/by-category', (req, res) => {
           description: item.description,
           stockIn: 0,
           stockOut: item.total_out,
-          currentStock: -item.total_out
+          currentStock: -item.total_out,
         };
       }
     });
@@ -279,17 +471,22 @@ router.get('/by-category', (req, res) => {
   }
 });
 
-// ============ LEDGER ROUTES ============
+/* ======================================================
+                LEDGER ROUTES
+====================================================== */
 
-// Get supplier ledger
-router.get('/supplier-ledger/:supplierName', (req, res) => {
+// Supplier Ledger
+router.get("/supplier-ledger/:supplierName", (req, res) => {
   try {
-    const { supplierName } = req.params;
-    const ledger = db.prepare(`
-      SELECT * FROM supplier_ledger 
-      WHERE supplier_name = ? 
+    const ledger = db
+      .prepare(
+        `
+      SELECT * FROM supplier_ledger
+      WHERE supplier_name = ?
       ORDER BY date DESC, id DESC
-    `).all(supplierName);
+    `
+      )
+      .all(req.params.supplierName);
 
     res.json(ledger);
   } catch (error) {
@@ -297,15 +494,18 @@ router.get('/supplier-ledger/:supplierName', (req, res) => {
   }
 });
 
-// Get customer ledger
-router.get('/customer-ledger/:customerName', (req, res) => {
+// Customer Ledger
+router.get("/customer-ledger/:customerName", (req, res) => {
   try {
-    const { customerName } = req.params;
-    const ledger = db.prepare(`
-      SELECT * FROM customer_ledger 
-      WHERE customer_name = ? 
+    const ledger = db
+      .prepare(
+        `
+      SELECT * FROM customer_ledger
+      WHERE customer_name = ?
       ORDER BY date DESC, id DESC
-    `).all(customerName);
+    `
+      )
+      .all(req.params.customerName);
 
     res.json(ledger);
   } catch (error) {
@@ -313,49 +513,51 @@ router.get('/customer-ledger/:customerName', (req, res) => {
   }
 });
 
-// Get all suppliers with their ledgers
-router.get('/suppliers-with-ledger', (req, res) => {
+// All suppliers with ledger
+router.get("/suppliers-with-ledger", (req, res) => {
   try {
-    const suppliers = db.prepare('SELECT * FROM suppliers').all();
-    
-    const suppliersWithLedger = suppliers.map(supplier => {
-      const ledger = db.prepare(`
-        SELECT * FROM supplier_ledger 
-        WHERE supplier_name = ? 
-        ORDER BY date DESC, id DESC
-      `).all(supplier.name);
+    const suppliers = db.prepare("SELECT * FROM suppliers").all();
 
-      return {
-        ...supplier,
-        ledger
-      };
+    const result = suppliers.map((s) => {
+      const ledger = db
+        .prepare(
+          `
+        SELECT * FROM supplier_ledger
+        WHERE supplier_name = ?
+        ORDER BY date DESC, id DESC
+      `
+        )
+        .all(s.name);
+
+      return { ...s, ledger };
     });
 
-    res.json(suppliersWithLedger);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get all customers with their ledgers
-router.get('/customers-with-ledger', (req, res) => {
+// All customers with ledger
+router.get("/customers-with-ledger", (req, res) => {
   try {
-    const customers = db.prepare('SELECT * FROM customers').all();
-    
-    const customersWithLedger = customers.map(customer => {
-      const ledger = db.prepare(`
-        SELECT * FROM customer_ledger 
-        WHERE customer_name = ? 
-        ORDER BY date DESC, id DESC
-      `).all(customer.name);
+    const customers = db.prepare("SELECT * FROM customers").all();
 
-      return {
-        ...customer,
-        ledger
-      };
+    const result = customers.map((c) => {
+      const ledger = db
+        .prepare(
+          `
+        SELECT * FROM customer_ledger
+        WHERE customer_name = ?
+        ORDER BY date DESC, id DESC
+      `
+        )
+        .all(c.name);
+
+      return { ...c, ledger };
     });
 
-    res.json(customersWithLedger);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
