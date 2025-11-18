@@ -6,12 +6,45 @@
 // const __filename = fileURLToPath(import.meta.url);
 // const __dirname = path.dirname(__filename);
 
-// // Database file path
 // const dbPath = path.join(__dirname, 'facsys.db');
 // const db = new Database(dbPath);
 
-// // Initialize tables
+// // Initialize all tables
 // function init() {
+
+//   // USERS TABLE (For Login)
+//   db.prepare(`
+//     CREATE TABLE IF NOT EXISTS users (
+//       id INTEGER PRIMARY KEY AUTOINCREMENT,
+//       email TEXT UNIQUE NOT NULL,
+//       password TEXT NOT NULL,
+//       role TEXT DEFAULT 'admin'
+//     )
+//   `).run();
+
+//   // INSERT YOUR ADMIN USER INTO DATABASE
+//   const ADMIN_EMAIL = "admin@buttmalik.com";
+//   const ADMIN_PASSWORD = "admin123";
+
+//   // Check if admin already exists
+//   const adminExists = db.prepare("SELECT * FROM users WHERE email = ?").get(ADMIN_EMAIL);
+
+//   if (!adminExists) {
+//     db.prepare("INSERT INTO users (email, password, role) VALUES (?, ?, ?)")
+//       .run(ADMIN_EMAIL, ADMIN_PASSWORD, "admin");
+//     console.log("✅ Default admin created in database");
+//   }
+
+//   // LOGIN LOGS TABLE
+//   db.prepare(`
+//     CREATE TABLE IF NOT EXISTS login_logs (
+//       id INTEGER PRIMARY KEY AUTOINCREMENT,
+//       email TEXT,
+//       login_time TEXT,
+//       ip_address TEXT
+//     )
+//   `).run();
+
 //   // categories
 //   db.prepare(`CREATE TABLE IF NOT EXISTS categories (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,25 +52,73 @@
 //     description TEXT
 //   )`).run();
 
-//   // suppliers
+//   // suppliers (with ledger support)
 //   db.prepare(`CREATE TABLE IF NOT EXISTS suppliers (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
-//     name TEXT,
+//     name TEXT NOT NULL,
 //     phone TEXT,
-//     email TEXT,
-//     address TEXT
+//     city TEXT
 //   )`).run();
 
-//   // customers
+//   // customers (with ledger support)
 //   db.prepare(`CREATE TABLE IF NOT EXISTS customers (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
-//     name TEXT,
+//     name TEXT NOT NULL,
 //     phone TEXT,
-//     email TEXT,
-//     address TEXT
+//     city TEXT
 //   )`).run();
 
-//   // products
+//   // stock_in table
+//   db.prepare(`CREATE TABLE IF NOT EXISTS stock_in (
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     date TEXT NOT NULL,
+//     description TEXT NOT NULL,
+//     weight REAL NOT NULL,
+//     rate REAL NOT NULL,
+//     amount REAL NOT NULL,
+//     supplier TEXT NOT NULL,
+//     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+//   )`).run();
+
+//   // stock_out table
+//   db.prepare(`CREATE TABLE IF NOT EXISTS stock_out (
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     date TEXT NOT NULL,
+//     description TEXT NOT NULL,
+//     weight REAL NOT NULL,
+//     rate REAL NOT NULL,
+//     amount REAL NOT NULL,
+//     customer TEXT NOT NULL,
+//     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+//   )`).run();
+
+//   // supplier_ledger table
+//   db.prepare(`CREATE TABLE IF NOT EXISTS supplier_ledger (
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     supplier_name TEXT NOT NULL,
+//     date TEXT NOT NULL,
+//     description TEXT NOT NULL,
+//     weight REAL,
+//     rate REAL,
+//     debit REAL DEFAULT 0,
+//     credit REAL DEFAULT 0,
+//     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+//   )`).run();
+
+//   // customer_ledger table
+//   db.prepare(`CREATE TABLE IF NOT EXISTS customer_ledger (
+//     id INTEGER PRIMARY KEY AUTOINCREMENT,
+//     customer_name TEXT NOT NULL,
+//     date TEXT NOT NULL,
+//     description TEXT NOT NULL,
+//     weight REAL,
+//     rate REAL,
+//     debit REAL DEFAULT 0,
+//     credit REAL DEFAULT 0,
+//     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+//   )`).run();
+
+//   // products (keep existing structure)
 //   db.prepare(`CREATE TABLE IF NOT EXISTS products (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
 //     name TEXT NOT NULL,
@@ -51,7 +132,7 @@
 //     FOREIGN KEY(supplier_id) REFERENCES suppliers(id)
 //   )`).run();
 
-//   // purchases
+//   // purchases (keep existing)
 //   db.prepare(`CREATE TABLE IF NOT EXISTS purchases (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
 //     product_id INTEGER,
@@ -64,7 +145,7 @@
 //     FOREIGN KEY(supplier_id) REFERENCES suppliers(id)
 //   )`).run();
 
-//   // sales
+//   // sales (keep existing)
 //   db.prepare(`CREATE TABLE IF NOT EXISTS sales (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
 //     product_id INTEGER,
@@ -77,7 +158,7 @@
 //     FOREIGN KEY(customer_id) REFERENCES customers(id)
 //   )`).run();
 
-//   // transactions
+//   // transactions (keep existing)
 //   db.prepare(`CREATE TABLE IF NOT EXISTS transactions (
 //     id INTEGER PRIMARY KEY AUTOINCREMENT,
 //     type TEXT,
@@ -86,12 +167,13 @@
 //     amount REAL,
 //     date TEXT
 //   )`).run();
+
+//   console.log("✅ All tables initialized successfully");
 // }
 
-// // Initialize DB
+// // Initialize Database
 // init();
 
-// // Export the database instance
 // export default db;
 
 import path from 'path';
@@ -105,10 +187,20 @@ const __dirname = path.dirname(__filename);
 const dbPath = path.join(__dirname, 'facsys.db');
 const db = new Database(dbPath);
 
+// Helper function to add column if missing
+function addColumnIfNotExists(table, column, type) {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all();
+  const columnExists = columns.some(col => col.name === column);
+  if (!columnExists) {
+    db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`).run();
+    console.log(`✅ Column '${column}' added to table '${table}'`);
+  }
+}
+
 // Initialize all tables
 function init() {
 
-  // USERS TABLE (For Login)
+  // USERS TABLE
   db.prepare(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -118,20 +210,18 @@ function init() {
     )
   `).run();
 
-  // INSERT YOUR ADMIN USER INTO DATABASE
+  // Default admin
   const ADMIN_EMAIL = "admin@buttmalik.com";
   const ADMIN_PASSWORD = "admin123";
 
-  // Check if admin already exists
   const adminExists = db.prepare("SELECT * FROM users WHERE email = ?").get(ADMIN_EMAIL);
-
   if (!adminExists) {
     db.prepare("INSERT INTO users (email, password, role) VALUES (?, ?, ?)")
       .run(ADMIN_EMAIL, ADMIN_PASSWORD, "admin");
     console.log("✅ Default admin created in database");
   }
 
-    // LOGIN LOGS TABLE
+  // LOGIN LOGS TABLE
   db.prepare(`
     CREATE TABLE IF NOT EXISTS login_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,32 +231,80 @@ function init() {
     )
   `).run();
 
-  // categories
+  // CATEGORIES TABLE
   db.prepare(`CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     description TEXT
   )`).run();
 
-  // suppliers
+  // SUPPLIERS TABLE
   db.prepare(`CREATE TABLE IF NOT EXISTS suppliers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    phone TEXT,
-    email TEXT,
-    address TEXT
+    name TEXT NOT NULL,
+    phone TEXT
   )`).run();
+  addColumnIfNotExists('suppliers', 'city', 'TEXT');
 
-  // customers
+  // CUSTOMERS TABLE
   db.prepare(`CREATE TABLE IF NOT EXISTS customers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT,
-    phone TEXT,
-    email TEXT,
-    address TEXT
+    name TEXT NOT NULL,
+    phone TEXT
+  )`).run();
+  addColumnIfNotExists('customers', 'city', 'TEXT');
+
+  // STOCK IN TABLE
+  db.prepare(`CREATE TABLE IF NOT EXISTS stock_in (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    weight REAL NOT NULL,
+    rate REAL NOT NULL,
+    amount REAL NOT NULL,
+    supplier TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`).run();
 
-  // products
+  // STOCK OUT TABLE
+  db.prepare(`CREATE TABLE IF NOT EXISTS stock_out (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    weight REAL NOT NULL,
+    rate REAL NOT NULL,
+    amount REAL NOT NULL,
+    customer TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+
+  // SUPPLIER LEDGER TABLE
+  db.prepare(`CREATE TABLE IF NOT EXISTS supplier_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_name TEXT NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    weight REAL,
+    rate REAL,
+    debit REAL DEFAULT 0,
+    credit REAL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+
+  // CUSTOMER LEDGER TABLE
+  db.prepare(`CREATE TABLE IF NOT EXISTS customer_ledger (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_name TEXT NOT NULL,
+    date TEXT NOT NULL,
+    description TEXT NOT NULL,
+    weight REAL,
+    rate REAL,
+    debit REAL DEFAULT 0,
+    credit REAL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`).run();
+
+  // PRODUCTS TABLE
   db.prepare(`CREATE TABLE IF NOT EXISTS products (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -180,7 +318,7 @@ function init() {
     FOREIGN KEY(supplier_id) REFERENCES suppliers(id)
   )`).run();
 
-  // purchases
+  // PURCHASES TABLE
   db.prepare(`CREATE TABLE IF NOT EXISTS purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER,
@@ -193,7 +331,7 @@ function init() {
     FOREIGN KEY(supplier_id) REFERENCES suppliers(id)
   )`).run();
 
-  // sales
+  // SALES TABLE
   db.prepare(`CREATE TABLE IF NOT EXISTS sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     product_id INTEGER,
@@ -206,7 +344,7 @@ function init() {
     FOREIGN KEY(customer_id) REFERENCES customers(id)
   )`).run();
 
-  // transactions
+  // TRANSACTIONS TABLE
   db.prepare(`CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT,
@@ -216,6 +354,7 @@ function init() {
     date TEXT
   )`).run();
 
+  console.log("✅ All tables initialized successfully");
 }
 
 // Initialize Database
