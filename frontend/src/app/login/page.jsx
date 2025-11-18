@@ -10,31 +10,41 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Hardcoded credentials
-  const ADMIN_EMAIL = "admin@buttmalik.com";
-  const ADMIN_PASSWORD = "admin123";
+  
+const handleSubmit = async () => {
+  setError("");
+  setIsLoading(true);
 
-  const handleSubmit = () => {
-    setError("");
-    setIsLoading(true);
+  try {
+    const res = await fetch("http://localhost:4000/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password, ip: window.location.hostname })
+    });
 
-    // Simulate login delay
-    setTimeout(() => {
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
-        // Successful login - match the key used in AuthWrapper
-        localStorage.setItem("auth", "true");
-        localStorage.setItem("userEmail", email);
-        localStorage.setItem("loginTime", new Date().toISOString());
-        
-        // Redirect to dashboard
-        window.location.href = "/dashboard";
-      } else {
-        // Failed login
-        setError("Invalid email or password");
-        setIsLoading(false);
-      }
-    }, 1000);
-  };
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.message || "Login failed");
+      setIsLoading(false);
+      return;
+    }
+
+    // Success
+    localStorage.setItem("auth", "true");
+    localStorage.setItem("userEmail", data.user.email);
+    localStorage.setItem("loginTime", new Date().toISOString());
+
+    window.location.href = "/dashboard";
+
+  } catch (error) {
+    setError("Server error, try again");
+  }
+
+  setIsLoading(false);
+};
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
