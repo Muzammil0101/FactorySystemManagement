@@ -1,9 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Plus, Users, Phone, MapPin, Eye, Trash2, Search, DollarSign, X, FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { Plus, Users, Phone, MapPin, Eye, Trash2, Search, X, FileText, TrendingUp, TrendingDown, Edit2, Save, Printer } from "lucide-react";
 
-// UPDATE THIS WITH YOUR ACTUAL API URL
-const API_URL = "http://localhost:4000/api"; // Change to your backend URL
+const API_URL = "http://localhost:4000/api";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -15,8 +14,9 @@ export default function CustomersPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentForm, setPaymentForm] = useState({ amount: "", date: new Date().toISOString().split('T')[0], description: "" });
   const [loading, setLoading] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [editForm, setEditForm] = useState({});
 
-  // Fetch customers from API
   const fetchCustomers = async () => {
     try {
       setLoading(true);
@@ -54,7 +54,7 @@ export default function CustomersPage() {
         alert(result.message);
         setForm({ name: "", phone: "", city: "" });
         setShowForm(false);
-        fetchCustomers(); // Refresh list
+        fetchCustomers();
       } else {
         alert(result.error || "Failed to add customer");
       }
@@ -76,7 +76,7 @@ export default function CustomersPage() {
 
       if (response.ok) {
         alert(result.message);
-        fetchCustomers(); // Refresh list
+        fetchCustomers();
       } else {
         alert(result.error || "Failed to delete customer");
       }
@@ -105,9 +105,8 @@ export default function CustomersPage() {
         alert(result.message);
         setPaymentForm({ amount: "", date: new Date().toISOString().split('T')[0], description: "" });
         setShowPaymentModal(false);
-        fetchCustomers(); // Refresh list
+        fetchCustomers();
 
-        // Update selected customer with fresh data
         const updatedCustomer = await fetch(`${API_URL}/customers/${selectedCustomer.id}`);
         const customerData = await updatedCustomer.json();
         setSelectedCustomer(customerData);
@@ -117,6 +116,71 @@ export default function CustomersPage() {
     } catch (error) {
       console.error("Error receiving payment:", error);
       alert("Failed to process payment");
+    }
+  };
+
+  const handleEditEntry = (entry) => {
+    setEditingEntry(entry.id);
+    setEditForm({
+      date: entry.date,
+      description: entry.description,
+      weight: entry.weight,
+      rate: entry.rate,
+      debit: entry.debit || 0,
+      credit: entry.credit || 0
+    });
+  };
+
+  const handleSaveEdit = async (ledgerId) => {
+    try {
+      const response = await fetch(`${API_URL}/customers/ledger/${ledgerId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm)
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        alert(result.message);
+        setEditingEntry(null);
+        fetchCustomers();
+        
+        const updatedCustomer = await fetch(`${API_URL}/customers/${selectedCustomer.id}`);
+        const customerData = await updatedCustomer.json();
+        setSelectedCustomer(customerData);
+      } else {
+        alert(result.error || "Failed to update entry");
+      }
+    } catch (error) {
+      console.error("Error updating entry:", error);
+      alert("Failed to update entry");
+    }
+  };
+
+  const handleDeleteEntry = async (ledgerId) => {
+    if (!confirm("Are you sure you want to delete this ledger entry?")) return;
+
+    try {
+      const response = await fetch(`${API_URL}/customers/ledger/${ledgerId}`, {
+        method: 'DELETE'
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        alert(result.message);
+        fetchCustomers();
+        
+        const updatedCustomer = await fetch(`${API_URL}/customers/${selectedCustomer.id}`);
+        const customerData = await updatedCustomer.json();
+        setSelectedCustomer(customerData);
+      } else {
+        alert(result.error || "Failed to delete entry");
+      }
+    } catch (error) {
+      console.error("Error deleting entry:", error);
+      alert("Failed to delete entry");
     }
   };
 
@@ -231,8 +295,7 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8 -m-3">
-      {/* Header */}
+    <div className="bg-gradient-to-br from-blue-100 via-indigo-100 to-purple-100 min-h-screen pt-24 px-6 pb-8">
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold text-slate-800 flex items-center gap-3">
@@ -251,7 +314,6 @@ export default function CustomersPage() {
         </button>
       </div>
 
-      {/* Add Customer Form */}
       {showForm && (
         <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl shadow-xl mb-8 border border-white/50">
           <h3 className="text-xl font-semibold text-slate-800 mb-4">New Customer Details</h3>
@@ -292,7 +354,6 @@ export default function CustomersPage() {
         </div>
       )}
 
-      {/* Search Bar */}
       <div className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl shadow-lg mb-6 border border-white/50">
         <div className="relative">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
@@ -306,7 +367,6 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Customer Cards */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.length === 0 ? (
           <div className="col-span-full bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-12 text-center border border-white/50">
@@ -345,7 +405,6 @@ export default function CustomersPage() {
                     </div>
                   </div>
 
-                  {/* Balance Display */}
                   <div className={`p-4 rounded-xl mb-4 ${balance >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-slate-700">Balance</span>
@@ -359,7 +418,6 @@ export default function CustomersPage() {
                     </div>
                   </div>
 
-                  {/* Action Buttons */}
                   <div className="flex gap-2">
                     <button
                       onClick={() => {
@@ -377,7 +435,6 @@ export default function CustomersPage() {
                       }}
                       className="flex-1 bg-orange-100 hover:bg-orange-200 text-orange-700 px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 font-medium transition-all"
                     >
-                      {/* Replace DollarSign icon with Rs styled like an icon */}
                       <span className="text-[16px] font-semibold">Rs</span> Receive
                     </button>
                     <button
@@ -394,7 +451,6 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {/* Ledger Modal */}
       {showLedger && selectedCustomer && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
@@ -404,7 +460,10 @@ export default function CustomersPage() {
                 <p className="text-blue-100 mt-1">{selectedCustomer.name}</p>
               </div>
               <button
-                onClick={() => setShowLedger(false)}
+                onClick={() => {
+                  setShowLedger(false);
+                  setEditingEntry(null);
+                }}
                 className="text-white hover:bg-white/20 p-2 rounded-xl transition-all"
               >
                 <X size={24} />
@@ -412,7 +471,6 @@ export default function CustomersPage() {
             </div>
 
             <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-              {/* Customer Info */}
               <div className="grid md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-slate-50 p-4 rounded-xl">
                   <p className="text-sm text-slate-600">Phone</p>
@@ -428,7 +486,6 @@ export default function CustomersPage() {
                 </div>
               </div>
 
-              {/* Ledger Table */}
               {selectedCustomer.ledger && selectedCustomer.ledger.length > 0 ? (
                 <div className="overflow-x-auto rounded-xl border border-slate-200">
                   <table className="w-full">
@@ -440,17 +497,105 @@ export default function CustomersPage() {
                         <th className="p-4 text-right text-sm font-semibold text-slate-700">Rate</th>
                         <th className="p-4 text-right text-sm font-semibold text-slate-700">Debit</th>
                         <th className="p-4 text-right text-sm font-semibold text-slate-700">Credit</th>
+                        <th className="p-4 text-center text-sm font-semibold text-slate-700">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedCustomer.ledger.map((entry, idx) => (
                         <tr key={entry.id || idx} className="border-t border-slate-200 hover:bg-slate-50">
-                          <td className="p-4 text-sm text-slate-700">{entry.date}</td>
-                          <td className="p-4 text-sm text-slate-700">{entry.description}</td>
-                          <td className="p-4 text-sm text-slate-700 text-right">{entry.weight}</td>
-                          <td className="p-4 text-sm text-slate-700 text-right">{entry.rate}</td>
-                          <td className="p-4 text-sm font-semibold text-red-600 text-right">{entry.debit || '-'}</td>
-                          <td className="p-4 text-sm font-semibold text-green-600 text-right">{entry.credit || '-'}</td>
+                          {editingEntry === entry.id ? (
+                            <>
+                              <td className="p-2">
+                                <input 
+                                  type="date"
+                                  value={editForm.date}
+                                  onChange={(e) => setEditForm({...editForm, date: e.target.value})}
+                                  className="w-full border rounded px-2 py-1 text-sm"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input 
+                                  type="text"
+                                  value={editForm.description}
+                                  onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                                  className="w-full border rounded px-2 py-1 text-sm"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input 
+                                  type="text"
+                                  value={editForm.weight}
+                                  onChange={(e) => setEditForm({...editForm, weight: e.target.value})}
+                                  className="w-full border rounded px-2 py-1 text-sm text-right"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input 
+                                  type="text"
+                                  value={editForm.rate}
+                                  onChange={(e) => setEditForm({...editForm, rate: e.target.value})}
+                                  className="w-full border rounded px-2 py-1 text-sm text-right"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input 
+                                  type="number"
+                                  value={editForm.debit}
+                                  onChange={(e) => setEditForm({...editForm, debit: e.target.value})}
+                                  className="w-full border rounded px-2 py-1 text-sm text-right"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <input 
+                                  type="number"
+                                  value={editForm.credit}
+                                  onChange={(e) => setEditForm({...editForm, credit: e.target.value})}
+                                  className="w-full border rounded px-2 py-1 text-sm text-right"
+                                />
+                              </td>
+                              <td className="p-2">
+                                <div className="flex justify-center gap-1">
+                                  <button 
+                                    onClick={() => handleSaveEdit(entry.id)}
+                                    className="bg-green-100 hover:bg-green-200 text-green-700 p-2 rounded transition-all"
+                                  >
+                                    <Save size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => setEditingEntry(null)}
+                                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded transition-all"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-4 text-sm text-slate-700">{entry.date}</td>
+                              <td className="p-4 text-sm text-slate-700">{entry.description}</td>
+                              <td className="p-4 text-sm text-slate-700 text-right">{entry.weight}</td>
+                              <td className="p-4 text-sm text-slate-700 text-right">{entry.rate}</td>
+                              <td className="p-4 text-sm font-semibold text-red-600 text-right">{entry.debit || '-'}</td>
+                              <td className="p-4 text-sm font-semibold text-green-600 text-right">{entry.credit || '-'}</td>
+                              <td className="p-4">
+                                <div className="flex justify-center gap-1">
+                                  <button 
+                                    onClick={() => handleEditEntry(entry)}
+                                    className="bg-blue-100 hover:bg-blue-200 text-blue-700 p-2 rounded transition-all"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button 
+                                    onClick={() => handleDeleteEntry(entry.id)}
+                                    className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded transition-all"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </>
+                          )}
                         </tr>
                       ))}
                       <tr className="bg-slate-100 font-bold border-t-2 border-slate-300">

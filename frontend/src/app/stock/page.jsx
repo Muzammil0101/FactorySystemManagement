@@ -1,7 +1,6 @@
-
 "use client";
 import { useState, useEffect } from "react";
-import { Package, TrendingUp, TrendingDown, Plus, Calendar, FileText, User, CheckCircle, AlertCircle, X } from "lucide-react";
+import { Package, TrendingUp, TrendingDown, Plus, Calendar, FileText, User, CheckCircle, AlertCircle, X, Edit2, Trash2 } from "lucide-react";
 
 const API_URL = "http://localhost:4000/api";
 
@@ -14,6 +13,8 @@ export default function StockPage() {
   const [summary, setSummary] = useState({ totalIn: 0, totalOut: 0, currentStock: 0 });
   const [notification, setNotification] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editType, setEditType] = useState(null);
 
   const [formIn, setFormIn] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -148,6 +149,57 @@ export default function StockPage() {
     type === "in" ? setFormIn(form) : setFormOut(form);
   };
 
+  const handleEdit = (item, type) => {
+    setEditingId(item.id);
+    setEditType(type);
+    if (type === "in") {
+      setFormIn({
+        date: item.date,
+        description: item.description,
+        weight: item.weight,
+        rate: item.rate,
+        amount: item.amount,
+        supplier: item.supplier,
+      });
+    } else {
+      setFormOut({
+        date: item.date,
+        description: item.description,
+        weight: item.weight,
+        rate: item.rate,
+        amount: item.amount,
+        customer: item.customer,
+      });
+    }
+  };
+
+  const handleDelete = async (id, type) => {
+    if (!confirm("Are you sure you want to delete this record?")) return;
+
+    setLoading(true);
+    try {
+      const endpoint = type === "in" ? "stock-in" : "stock-out";
+      const res = await fetch(`${API_URL}/stock/${endpoint}/${id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        showNotification(data.error || "Error deleting record", "error");
+        return;
+      }
+
+      showNotification(data.message || "Record deleted successfully", "success");
+      await fetchAllData();
+    } catch (error) {
+      console.error("Error:", error);
+      showNotification("Error deleting record", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAdd = async (type) => {
     const form = type === "in" ? formIn : formOut;
 
@@ -167,8 +219,11 @@ export default function StockPage() {
     setLoading(true);
     try {
       const endpoint = type === "in" ? "stock-in" : "stock-out";
-      const res = await fetch(`${API_URL}/stock/${endpoint}`, {
-        method: "POST",
+      const method = editingId ? "PUT" : "POST";
+      const url = editingId ? `${API_URL}/stock/${endpoint}/${editingId}` : `${API_URL}/stock/${endpoint}`;
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form)
       });
@@ -185,7 +240,9 @@ export default function StockPage() {
       // Refresh data
       await fetchAllData();
 
-      // Reset form
+      // Reset form and editing state
+      setEditingId(null);
+      setEditType(null);
       if (type === "in") {
         setFormIn({ 
           date: new Date().toISOString().split('T')[0], 
@@ -211,6 +268,27 @@ export default function StockPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditType(null);
+    setFormIn({ 
+      date: new Date().toISOString().split('T')[0], 
+      description: "", 
+      weight: "", 
+      rate: "", 
+      amount: "", 
+      supplier: "" 
+    });
+    setFormOut({ 
+      date: new Date().toISOString().split('T')[0], 
+      description: "", 
+      weight: "", 
+      rate: "", 
+      amount: "", 
+      customer: "" 
+    });
   };
 
   return (
@@ -287,8 +365,8 @@ export default function StockPage() {
                 <TrendingUp className="text-white" size={24} />
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-white">Stock In</h3>
-                <p className="text-green-100 text-sm">Add inventory from supplier</p>
+                <h3 className="text-2xl font-bold text-white">{editingId && editType === "in" ? "Edit Stock In" : "Stock In"}</h3>
+                <p className="text-green-100 text-sm">{editingId && editType === "in" ? "Update inventory record" : "Add inventory from supplier"}</p>
               </div>
             </div>
           </div>
@@ -377,7 +455,7 @@ export default function StockPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Amount</label>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Amount (PKR)</label>
                 <input 
                   type="number" 
                   name="amount" 
@@ -389,13 +467,23 @@ export default function StockPage() {
               </div>
             </div>
 
-            <button 
-              onClick={() => handleAdd("in")} 
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus size={20} /> {loading ? "Adding..." : "Add Stock In"}
-            </button>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => handleAdd("in")} 
+                disabled={loading}
+                className="flex-1 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus size={20} /> {loading ? "Processing..." : editingId && editType === "in" ? "Update Stock In" : "Add Stock In"}
+              </button>
+              {editingId && editType === "in" && (
+                <button 
+                  onClick={handleCancel}
+                  className="flex-1 bg-slate-400 hover:bg-slate-500 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -407,8 +495,8 @@ export default function StockPage() {
                 <TrendingDown className="text-white" size={24} />
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-white">Stock Out</h3>
-                <p className="text-red-100 text-sm">Sell inventory to customer</p>
+                <h3 className="text-2xl font-bold text-white">{editingId && editType === "out" ? "Edit Stock Out" : "Stock Out"}</h3>
+                <p className="text-red-100 text-sm">{editingId && editType === "out" ? "Update inventory record" : "Sell inventory to customer"}</p>
               </div>
             </div>
           </div>
@@ -497,7 +585,7 @@ export default function StockPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Amount</label>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Amount (PKR)</label>
                 <input 
                   type="number" 
                   name="amount" 
@@ -520,13 +608,23 @@ export default function StockPage() {
               </div>
             )}
 
-            <button 
-              onClick={() => handleAdd("out")} 
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Plus size={20} /> {loading ? "Adding..." : "Add Stock Out"}
-            </button>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => handleAdd("out")} 
+                disabled={loading}
+                className="flex-1 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Plus size={20} /> {loading ? "Processing..." : editingId && editType === "out" ? "Update Stock Out" : "Add Stock Out"}
+              </button>
+              {editingId && editType === "out" && (
+                <button 
+                  onClick={handleCancel}
+                  className="flex-1 bg-slate-400 hover:bg-slate-500 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -539,16 +637,44 @@ export default function StockPage() {
             <TrendingUp className="text-green-600" size={20} />
             Recent Stock In
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-3 max-h-96 overflow-y-auto">
             {Array.isArray(stockIn) && stockIn.slice(-5).reverse().map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100">
-                <div>
-                  <p className="font-medium text-slate-800">{item.description}</p>
-                  <p className="text-xs text-slate-600">{item.supplier} • {item.date}</p>
+              <div key={idx} className="p-4 bg-green-50 rounded-xl border border-green-100 hover:border-green-300 transition-all">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-bold text-slate-800">{item.description}</p>
+                    <p className="text-xs text-slate-600">{item.supplier} • {item.date}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(item, "in")}
+                      className="p-2 hover:bg-green-200 rounded-lg transition-all text-green-700"
+                      title="Edit"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id, "in")}
+                      className="p-2 hover:bg-red-200 rounded-lg transition-all text-red-700"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-green-700">{item.weight} kg</p>
-                  <p className="text-xs text-slate-600">${item.amount}</p>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="bg-white/60 p-2 rounded-lg">
+                    <p className="text-xs text-slate-600">Weight</p>
+                    <p className="font-semibold text-green-700">{item.weight} kg</p>
+                  </div>
+                  <div className="bg-white/60 p-2 rounded-lg">
+                    <p className="text-xs text-slate-600">Rate</p>
+                    <p className="font-semibold text-green-700">₨{parseFloat(item.rate).toFixed(2)}</p>
+                  </div>
+                  <div className="bg-white/60 p-2 rounded-lg">
+                    <p className="text-xs text-slate-600">Amount</p>
+                    <p className="font-semibold text-green-700">₨{parseFloat(item.amount).toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
             ))}
@@ -564,16 +690,44 @@ export default function StockPage() {
             <TrendingDown className="text-red-600" size={20} />
             Recent Stock Out
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-3 max-h-96 overflow-y-auto">
             {Array.isArray(stockOut) && stockOut.slice(-5).reverse().map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100">
-                <div>
-                  <p className="font-medium text-slate-800">{item.description}</p>
-                  <p className="text-xs text-slate-600">{item.customer} • {item.date}</p>
+              <div key={idx} className="p-4 bg-red-50 rounded-xl border border-red-100 hover:border-red-300 transition-all">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-bold text-slate-800">{item.description}</p>
+                    <p className="text-xs text-slate-600">{item.customer} • {item.date}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleEdit(item, "out")}
+                      className="p-2 hover:bg-red-200 rounded-lg transition-all text-red-700"
+                      title="Edit"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(item.id, "out")}
+                      className="p-2 hover:bg-red-200 rounded-lg transition-all text-red-700"
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-red-700">{item.weight} kg</p>
-                  <p className="text-xs text-slate-600">${item.amount}</p>
+                <div className="grid grid-cols-3 gap-2 text-sm">
+                  <div className="bg-white/60 p-2 rounded-lg">
+                    <p className="text-xs text-slate-600">Weight</p>
+                    <p className="font-semibold text-red-700">{item.weight} kg</p>
+                  </div>
+                  <div className="bg-white/60 p-2 rounded-lg">
+                    <p className="text-xs text-slate-600">Rate</p>
+                    <p className="font-semibold text-red-700">₨{parseFloat(item.rate).toFixed(2)}</p>
+                  </div>
+                  <div className="bg-white/60 p-2 rounded-lg">
+                    <p className="text-xs text-slate-600">Amount</p>
+                    <p className="font-semibold text-red-700">₨{parseFloat(item.amount).toLocaleString()}</p>
+                  </div>
                 </div>
               </div>
             ))}

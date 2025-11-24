@@ -180,6 +180,64 @@ router.post('/suppliers/:id/payment', (req, res) => {
   }
 });
 
+// Update supplier ledger entry
+router.put('/suppliers/ledger/:ledgerId', (req, res) => {
+  const { ledgerId } = req.params;
+  const { date, description, weight, rate, debit, credit } = req.body;
+
+  try {
+    const entry = db.prepare('SELECT * FROM supplier_ledger WHERE id = ?').get(ledgerId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Ledger entry not found' });
+    }
+
+    db.prepare(`
+      UPDATE supplier_ledger 
+      SET date = ?, description = ?, weight = ?, rate = ?, debit = ?, credit = ?
+      WHERE id = ?
+    `).run(
+      date || entry.date,
+      description || entry.description,
+      weight !== undefined ? weight : entry.weight,
+      rate !== undefined ? rate : entry.rate,
+      debit !== undefined ? parseFloat(debit) : entry.debit,
+      credit !== undefined ? parseFloat(credit) : entry.credit,
+      ledgerId
+    );
+
+    const updated = db.prepare('SELECT * FROM supplier_ledger WHERE id = ?').get(ledgerId);
+
+    res.json({
+      success: true,
+      message: 'Ledger entry updated successfully',
+      data: updated
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete supplier ledger entry
+router.delete('/suppliers/ledger/:ledgerId', (req, res) => {
+  const { ledgerId } = req.params;
+
+  try {
+    const entry = db.prepare('SELECT * FROM supplier_ledger WHERE id = ?').get(ledgerId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Ledger entry not found' });
+    }
+
+    db.prepare('DELETE FROM supplier_ledger WHERE id = ?').run(ledgerId);
+
+    res.json({
+      success: true,
+      message: 'Ledger entry deleted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ============ CUSTOMER ROUTES ============
 
 // Get all customers with their ledgers
@@ -351,6 +409,64 @@ router.post('/customers/:id/payment', (req, res) => {
       success: true,
       message: `Payment of $${amount} received from ${customer.name}`,
       data: newEntry
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update customer ledger entry
+router.put('/customers/ledger/:ledgerId', (req, res) => {
+  const { ledgerId } = req.params;
+  const { date, description, weight, rate, debit, credit } = req.body;
+
+  try {
+    const entry = db.prepare('SELECT * FROM customer_ledger WHERE id = ?').get(ledgerId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Ledger entry not found' });
+    }
+
+    db.prepare(`
+      UPDATE customer_ledger 
+      SET date = ?, description = ?, weight = ?, rate = ?, debit = ?, credit = ?
+      WHERE id = ?
+    `).run(
+      date || entry.date,
+      description || entry.description,
+      weight !== undefined ? weight : entry.weight,
+      rate !== undefined ? rate : entry.rate,
+      debit !== undefined ? parseFloat(debit) : entry.debit,
+      credit !== undefined ? parseFloat(credit) : entry.credit,
+      ledgerId
+    );
+
+    const updated = db.prepare('SELECT * FROM customer_ledger WHERE id = ?').get(ledgerId);
+
+    res.json({
+      success: true,
+      message: 'Ledger entry updated successfully',
+      data: updated
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete customer ledger entry
+router.delete('/customers/ledger/:ledgerId', (req, res) => {
+  const { ledgerId } = req.params;
+
+  try {
+    const entry = db.prepare('SELECT * FROM customer_ledger WHERE id = ?').get(ledgerId);
+    if (!entry) {
+      return res.status(404).json({ error: 'Ledger entry not found' });
+    }
+
+    db.prepare('DELETE FROM customer_ledger WHERE id = ?').run(ledgerId);
+
+    res.json({
+      success: true,
+      message: 'Ledger entry deleted successfully'
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

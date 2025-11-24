@@ -1,7 +1,17 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Package, FolderTree, Truck, TrendingUp, Users, Store, ChevronRight, Sparkles } from "lucide-react";
+import { 
+  LayoutDashboard, 
+  Package, 
+  FolderTree, 
+  Truck, 
+  TrendingUp, 
+  Users, 
+  Store, 
+  ChevronRight, 
+  Sparkles 
+} from "lucide-react";
 
 const Sidebar = () => {
   const path = usePathname();
@@ -13,6 +23,9 @@ const Sidebar = () => {
     { name: "Suppliers", path: "/suppliers", icon: Truck, gradient: "from-emerald-500 to-teal-600" },
     { name: "Customers", path: "/customer", icon: Users, gradient: "from-blue-500 to-cyan-600" },
     { name: "Profit & Loss", path: "/profit-loss", icon: TrendingUp, gradient: "from-green-500 to-emerald-600" },
+
+    // ⭐ Added new sidebar item here
+    { name: "Month-End Transfer", path: "/stock-transfer", icon: Sparkles, gradient: "from-pink-500 to-rose-600" }
   ];
 
   return (
@@ -57,7 +70,7 @@ const Sidebar = () => {
                   }`}
                 >
                   <div className="flex items-center gap-3 py-3.5 px-4">
-                    {/* Icon with gradient background when active */}
+                    
                     <div className={`p-2 rounded-xl transition-all duration-300 ${
                       isActive 
                         ? "bg-white/20 shadow-md" 
@@ -66,7 +79,6 @@ const Sidebar = () => {
                       <Icon size={20} className={isActive ? "text-white" : "text-slate-300 group-hover:text-white"} />
                     </div>
                     
-                    {/* Text */}
                     <span className={`flex-1 font-semibold transition-all duration-300 ${
                       isActive 
                         ? "text-white" 
@@ -74,8 +86,7 @@ const Sidebar = () => {
                     }`}>
                       {item.name}
                     </span>
-                    
-                    {/* Arrow indicator */}
+
                     <ChevronRight 
                       size={18} 
                       className={`transition-all duration-300 ${
@@ -86,7 +97,6 @@ const Sidebar = () => {
                     />
                   </div>
 
-                  {/* Active indicator bar */}
                   {isActive && (
                     <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-full shadow-lg"></div>
                   )}
@@ -100,10 +110,6 @@ const Sidebar = () => {
       {/* Footer Section */}
       <div className="relative p-6 pt-4">
         <div className="h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent mb-4"></div>
-        
-
-
-        {/* Version */}
         <p className="text-center text-xs text-slate-500 mt-4">Version 1.0.0</p>
       </div>
     </div>
