@@ -266,6 +266,80 @@
 //   }
 // });
 
+// // Update Stock In
+// router.put("/stock-in/:id", (req, res) => {
+//   const { id } = req.params;
+//   const { date, description, weight, rate, amount, supplier } = req.body;
+
+//   try {
+//     // Get existing record
+//     const existing = db.prepare("SELECT * FROM stock_in WHERE id = ?").get(id);
+//     if (!existing) {
+//       return res.status(404).json({ error: "Stock in record not found" });
+//     }
+
+//     // Validate required fields
+//     if (!date || !description || !weight || !rate || !supplier) {
+//       return res.status(400).json({ error: "All fields are required" });
+//     }
+
+//     // Update stock_in record
+//     db.prepare(
+//       `
+//       UPDATE stock_in
+//       SET date = ?, description = ?, weight = ?, rate = ?, amount = ?, supplier = ?
+//       WHERE id = ?
+//     `
+//     ).run(date, description, weight, rate, amount, supplier, id);
+
+//     // Auto-create category if new description
+//     db.prepare(
+//       `
+//       INSERT OR IGNORE INTO categories (name, description)
+//       VALUES (?, '')
+//     `
+//     ).run(description);
+
+//     // Auto-create supplier if new
+//     const existingSupplier = db.prepare("SELECT * FROM suppliers WHERE name = ?").get(supplier);
+//     if (!existingSupplier) {
+//       db.prepare(
+//         `
+//         INSERT INTO suppliers (name, phone, city)
+//         VALUES (?, '', '')
+//       `
+//       ).run(supplier);
+//     }
+
+//     // Delete old ledger entry
+//     db.prepare(
+//       `
+//       DELETE FROM supplier_ledger
+//       WHERE supplier_name = ? AND date = ? AND description = ? AND credit = ?
+//       ORDER BY id DESC LIMIT 1
+//     `
+//     ).run(existing.supplier, existing.date, existing.description, existing.amount);
+
+//     // Create new ledger entry
+//     db.prepare(
+//       `
+//       INSERT INTO supplier_ledger (supplier_name, date, description, weight, rate, debit, credit)
+//       VALUES (?, ?, ?, ?, ?, 0, ?)
+//     `
+//     ).run(supplier, date, description, weight, rate, amount);
+
+//     const updated = db.prepare("SELECT * FROM stock_in WHERE id = ?").get(id);
+
+//     res.json({
+//       success: true,
+//       message: "Stock in record updated successfully",
+//       data: updated,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
 // // Delete Stock In
 // router.delete("/stock-in/:id", (req, res) => {
 //   try {
@@ -367,6 +441,92 @@
 //       success: true,
 //       message: `Sold ${weight} kg of ${description}`,
 //       data: newRecord,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
+// // Update Stock Out
+// router.put("/stock-out/:id", (req, res) => {
+//   const { id } = req.params;
+//   const { date, description, weight, rate, amount, customer } = req.body;
+
+//   try {
+//     // Get existing record
+//     const existing = db.prepare("SELECT * FROM stock_out WHERE id = ?").get(id);
+//     if (!existing) {
+//       return res.status(404).json({ error: "Stock out record not found" });
+//     }
+
+//     // Validate required fields
+//     if (!date || !description || !weight || !rate || !customer) {
+//       return res.status(400).json({ error: "All fields are required" });
+//     }
+
+//     // Check stock availability (add back the old weight, then check if new weight is available)
+//     const totalIn = db.prepare("SELECT SUM(weight) as total FROM stock_in").get();
+//     const totalOut = db.prepare("SELECT SUM(weight) as total FROM stock_out WHERE id != ?").get(id);
+
+//     const currentStock = (totalIn.total || 0) - (totalOut.total || 0);
+
+//     if (parseFloat(weight) > currentStock) {
+//       return res.status(400).json({
+//         error: `Not enough stock! Available: ${currentStock.toFixed(2)} kg`,
+//       });
+//     }
+
+//     // Update stock_out record
+//     db.prepare(
+//       `
+//       UPDATE stock_out
+//       SET date = ?, description = ?, weight = ?, rate = ?, amount = ?, customer = ?
+//       WHERE id = ?
+//     `
+//     ).run(date, description, weight, rate, amount, customer, id);
+
+//     // Auto-create category if new description
+//     db.prepare(
+//       `
+//       INSERT OR IGNORE INTO categories (name, description)
+//       VALUES (?, '')
+//     `
+//     ).run(description);
+
+//     // Auto-create customer if new
+//     const existingCustomer = db.prepare("SELECT * FROM customers WHERE name = ?").get(customer);
+//     if (!existingCustomer) {
+//       db.prepare(
+//         `
+//         INSERT INTO customers (name, phone, city)
+//         VALUES (?, '', '')
+//       `
+//       ).run(customer);
+//     }
+
+//     // Delete old ledger entry
+//     db.prepare(
+//       `
+//       DELETE FROM customer_ledger
+//       WHERE customer_name = ? AND date = ? AND description = ? AND debit = ?
+//       ORDER BY id DESC LIMIT 1
+//     `
+//     ).run(existing.customer, existing.date, existing.description, existing.amount);
+
+//     // Create new ledger entry
+//     db.prepare(
+//       `
+//       INSERT INTO customer_ledger (customer_name, date, description, weight, rate, debit, credit)
+//       VALUES (?, ?, ?, ?, ?, ?, 0)
+//     `
+//     ).run(customer, date, description, weight, rate, amount);
+
+//     const updated = db.prepare("SELECT * FROM stock_out WHERE id = ?").get(id);
+
+//     res.json({
+//       success: true,
+//       message: "Stock out record updated successfully",
+//       data: updated,
 //     });
 //   } catch (error) {
 //     res.status(500).json({ error: error.message });
@@ -600,7 +760,6 @@ router.get("/categories", (req, res) => {
     const categories = db.prepare("SELECT * FROM categories ORDER BY name ASC").all();
 
     const categoriesWithStock = categories.map((cat) => {
-      // Use exact match instead of LIKE for better accuracy
       const stockInData = db
         .prepare(`
           SELECT COALESCE(SUM(CAST(weight AS REAL)), 0) AS total
@@ -794,7 +953,7 @@ router.post("/stock-in", (req, res) => {
       )
       .run(date, description, weight, rate, amount, supplier);
 
-    // Auto-create category if not found
+    // Auto-create category
     db.prepare(
       `
       INSERT OR IGNORE INTO categories (name, description)
@@ -839,18 +998,15 @@ router.put("/stock-in/:id", (req, res) => {
   const { date, description, weight, rate, amount, supplier } = req.body;
 
   try {
-    // Get existing record
     const existing = db.prepare("SELECT * FROM stock_in WHERE id = ?").get(id);
     if (!existing) {
       return res.status(404).json({ error: "Stock in record not found" });
     }
 
-    // Validate required fields
     if (!date || !description || !weight || !rate || !supplier) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    // Update stock_in record
     db.prepare(
       `
       UPDATE stock_in
@@ -859,26 +1015,14 @@ router.put("/stock-in/:id", (req, res) => {
     `
     ).run(date, description, weight, rate, amount, supplier, id);
 
-    // Auto-create category if new description
-    db.prepare(
-      `
-      INSERT OR IGNORE INTO categories (name, description)
-      VALUES (?, '')
-    `
-    ).run(description);
+    db.prepare(`INSERT OR IGNORE INTO categories (name, description) VALUES (?, '')`).run(description);
 
-    // Auto-create supplier if new
     const existingSupplier = db.prepare("SELECT * FROM suppliers WHERE name = ?").get(supplier);
     if (!existingSupplier) {
-      db.prepare(
-        `
-        INSERT INTO suppliers (name, phone, city)
-        VALUES (?, '', '')
-      `
-      ).run(supplier);
+      db.prepare(`INSERT INTO suppliers (name, phone, city) VALUES (?, '', '')`).run(supplier);
     }
 
-    // Delete old ledger entry
+    // Ledger Logic: Delete old, add new
     db.prepare(
       `
       DELETE FROM supplier_ledger
@@ -887,7 +1031,6 @@ router.put("/stock-in/:id", (req, res) => {
     `
     ).run(existing.supplier, existing.date, existing.description, existing.amount);
 
-    // Create new ledger entry
     db.prepare(
       `
       INSERT INTO supplier_ledger (supplier_name, date, description, weight, rate, debit, credit)
@@ -948,7 +1091,8 @@ router.get("/stock-out", (req, res) => {
 
 // Add Stock Out
 router.post("/stock-out", (req, res) => {
-  const { date, description, weight, rate, amount, customer } = req.body;
+  // 'rate' receives the Sale Rate, 'purchase_rate' receives the Purchased Rate
+  const { date, description, weight, rate, purchase_rate, amount, customer } = req.body;
 
   try {
     if (!date || !description || !weight || !rate || !customer) {
@@ -966,14 +1110,15 @@ router.post("/stock-out", (req, res) => {
       });
     }
 
+    // Insert with both rates
     const result = db
       .prepare(
         `
-      INSERT INTO stock_out (date, description, weight, rate, amount, customer)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO stock_out (date, description, weight, rate, purchase_rate, amount, customer)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `
       )
-      .run(date, description, weight, rate, amount, customer);
+      .run(date, description, weight, rate, purchase_rate || 0, amount, customer);
 
     // Auto-create category
     db.prepare(
@@ -994,7 +1139,7 @@ router.post("/stock-out", (req, res) => {
       ).run(customer);
     }
 
-    // Ledger entry
+    // Ledger entry (Uses 'rate' which is Sale Rate for debit calculation)
     db.prepare(
       `
       INSERT INTO customer_ledger (customer_name, date, description, weight, rate, debit, credit)
@@ -1017,7 +1162,7 @@ router.post("/stock-out", (req, res) => {
 // Update Stock Out
 router.put("/stock-out/:id", (req, res) => {
   const { id } = req.params;
-  const { date, description, weight, rate, amount, customer } = req.body;
+  const { date, description, weight, rate, purchase_rate, amount, customer } = req.body;
 
   try {
     // Get existing record
@@ -1026,7 +1171,6 @@ router.put("/stock-out/:id", (req, res) => {
       return res.status(404).json({ error: "Stock out record not found" });
     }
 
-    // Validate required fields
     if (!date || !description || !weight || !rate || !customer) {
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -1043,35 +1187,23 @@ router.put("/stock-out/:id", (req, res) => {
       });
     }
 
-    // Update stock_out record
+    // Update stock_out record with both rates
     db.prepare(
       `
       UPDATE stock_out
-      SET date = ?, description = ?, weight = ?, rate = ?, amount = ?, customer = ?
+      SET date = ?, description = ?, weight = ?, rate = ?, purchase_rate = ?, amount = ?, customer = ?
       WHERE id = ?
     `
-    ).run(date, description, weight, rate, amount, customer, id);
+    ).run(date, description, weight, rate, purchase_rate || 0, amount, customer, id);
 
-    // Auto-create category if new description
-    db.prepare(
-      `
-      INSERT OR IGNORE INTO categories (name, description)
-      VALUES (?, '')
-    `
-    ).run(description);
+    db.prepare(`INSERT OR IGNORE INTO categories (name, description) VALUES (?, '')`).run(description);
 
-    // Auto-create customer if new
     const existingCustomer = db.prepare("SELECT * FROM customers WHERE name = ?").get(customer);
     if (!existingCustomer) {
-      db.prepare(
-        `
-        INSERT INTO customers (name, phone, city)
-        VALUES (?, '', '')
-      `
-      ).run(customer);
+      db.prepare(`INSERT INTO customers (name, phone, city) VALUES (?, '', '')`).run(customer);
     }
 
-    // Delete old ledger entry
+    // Ledger Updates
     db.prepare(
       `
       DELETE FROM customer_ledger
@@ -1080,7 +1212,6 @@ router.put("/stock-out/:id", (req, res) => {
     `
     ).run(existing.customer, existing.date, existing.description, existing.amount);
 
-    // Create new ledger entry
     db.prepare(
       `
       INSERT INTO customer_ledger (customer_name, date, description, weight, rate, debit, credit)
@@ -1285,6 +1416,54 @@ router.get("/customers-with-ledger", (req, res) => {
     });
 
     res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/* ======================================================
+                PRODUCT ROUTES (Restored)
+====================================================== */
+
+router.get("/products", (req, res) => {
+  try {
+    const products = db.prepare("SELECT * FROM products").all();
+    res.json(products);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post("/products", (req, res) => {
+  const { name, category_id, supplier_id, cost_price, sell_price, stock_qty, sku } = req.body;
+  try {
+    const result = db.prepare(`
+      INSERT INTO products (name, category_id, supplier_id, cost_price, sell_price, stock_qty, sku)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(name, category_id, supplier_id, cost_price, sell_price, stock_qty, sku);
+    res.json({ success: true, id: result.lastInsertRowid });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete("/products/:id", (req, res) => {
+    try {
+        db.prepare("DELETE FROM products WHERE id = ?").run(req.params.id);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/* ======================================================
+                TRANSACTION ROUTES (Restored)
+====================================================== */
+
+router.get("/transactions", (req, res) => {
+  try {
+    const transactions = db.prepare("SELECT * FROM transactions ORDER BY date DESC").all();
+    res.json(transactions);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

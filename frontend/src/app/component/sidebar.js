@@ -25,7 +25,9 @@ const Sidebar = () => {
     { name: "Profit & Loss", path: "/profit-loss", icon: TrendingUp, gradient: "from-green-500 to-emerald-600" },
 
     // ⭐ Added new sidebar item here
-    { name: "Month-End Transfer", path: "/stock-transfer", icon: Sparkles, gradient: "from-pink-500 to-rose-600" }
+    {name: "Month-Wise Report", path: "/month-wise-report", icon: Sparkles, gradient: "from-yellow-500 to-red-600" },
+    { name: "Month-End Transfer", path: "/stock-transfer", icon: Sparkles, gradient: "from-pink-500 to-rose-600" },
+
   ];
 
   return (

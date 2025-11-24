@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Package, TrendingUp, TrendingDown, Plus, Calendar, FileText, User, CheckCircle, AlertCircle, X, Edit2, Trash2 } from "lucide-react";
+import { Package, TrendingUp, TrendingDown, Plus, Calendar, FileText, User, CheckCircle, AlertCircle, X, Edit2, Trash2, DollarSign } from "lucide-react";
 
 const API_URL = "http://localhost:4000/api";
 
@@ -29,7 +29,8 @@ export default function StockPage() {
     date: new Date().toISOString().split('T')[0],
     description: "",
     weight: "",
-    rate: "",
+    rate: "", // Sale Rate
+    purchase_rate: "", // Purchased Rate
     amount: "",
     customer: "",
   });
@@ -140,13 +141,25 @@ export default function StockPage() {
     const form = type === "in" ? { ...formIn } : { ...formOut };
     form[name] = value;
 
-    if (name === "weight" || name === "rate") {
-      const weight = name === "weight" ? value : form.weight;
-      const rate = name === "rate" ? value : form.rate;
-      form.amount = weight && rate ? (weight * rate).toFixed(2) : "";
+    if (type === "in") {
+      if (name === "weight" || name === "rate") {
+        const weight = name === "weight" ? value : form.weight;
+        const rate = name === "rate" ? value : form.rate;
+        form.amount = weight && rate ? (weight * rate).toFixed(2) : "";
+      }
+      setFormIn(form);
+    } else {
+      // Logic for Stock Out
+      // CHANGED: Calculation now uses weight and purchase_rate
+      if (name === "weight" || name === "purchase_rate") {
+        const weight = name === "weight" ? value : form.weight;
+        const pRate = name === "purchase_rate" ? value : form.purchase_rate; 
+        
+        // Amount is calculated based on Purchased Rate (not Sale Rate)
+        form.amount = weight && pRate ? (weight * pRate).toFixed(2) : "";
+      }
+      setFormOut(form);
     }
-
-    type === "in" ? setFormIn(form) : setFormOut(form);
   };
 
   const handleEdit = (item, type) => {
@@ -166,7 +179,8 @@ export default function StockPage() {
         date: item.date,
         description: item.description,
         weight: item.weight,
-        rate: item.rate,
+        rate: item.rate, 
+        purchase_rate: item.purchase_rate || "",
         amount: item.amount,
         customer: item.customer,
       });
@@ -203,6 +217,7 @@ export default function StockPage() {
   const handleAdd = async (type) => {
     const form = type === "in" ? formIn : formOut;
 
+    // Validation
     if (!form.date || !form.description || !form.weight || !form.rate) {
       showNotification("Please fill all required fields!", "error");
       return;
@@ -258,6 +273,7 @@ export default function StockPage() {
           description: "", 
           weight: "", 
           rate: "", 
+          purchase_rate: "",
           amount: "", 
           customer: "" 
         });
@@ -286,6 +302,7 @@ export default function StockPage() {
       description: "", 
       weight: "", 
       rate: "", 
+      purchase_rate: "",
       amount: "", 
       customer: "" 
     });
@@ -559,7 +576,41 @@ export default function StockPage() {
               </datalist>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            {/* Split Rates Grid */}
+            <div className="grid grid-cols-2 gap-3">
+               <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2 text-green-700">Sale Rate *</label>
+                <div className="relative">
+                  <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    name="rate" 
+                    value={formOut.rate} 
+                    onChange={(e) => handleChange(e, "out")} 
+                    placeholder="Sold At" 
+                    className="w-full pl-8 border border-slate-300 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none bg-green-50"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-2 text-blue-700">Purchased Rate</label>
+                <div className="relative">
+                  <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    name="purchase_rate" 
+                    value={formOut.purchase_rate} 
+                    onChange={(e) => handleChange(e, "out")} 
+                    placeholder="Cost Price" 
+                    className="w-full pl-8 border border-slate-300 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-blue-50"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-700 mb-2">Weight (kg) *</label>
                 <input 
@@ -573,19 +624,7 @@ export default function StockPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Rate *</label>
-                <input 
-                  type="number" 
-                  step="0.01" 
-                  name="rate" 
-                  value={formOut.rate} 
-                  onChange={(e) => handleChange(e, "out")} 
-                  placeholder="0.00" 
-                  className="w-full border border-slate-300 p-3 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-2">Amount (PKR)</label>
+                <label className="block text-xs font-medium text-slate-700 mb-2">Total Amount (PKR)</label>
                 <input 
                   type="number" 
                   name="amount" 
@@ -646,14 +685,14 @@ export default function StockPage() {
                     <p className="text-xs text-slate-600">{item.supplier} • {item.date}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button
+                    <button 
                       onClick={() => handleEdit(item, "in")}
                       className="p-2 hover:bg-green-200 rounded-lg transition-all text-green-700"
                       title="Edit"
                     >
                       <Edit2 size={16} />
                     </button>
-                    <button
+                    <button 
                       onClick={() => handleDelete(item.id, "in")}
                       className="p-2 hover:bg-red-200 rounded-lg transition-all text-red-700"
                       title="Delete"
@@ -699,14 +738,14 @@ export default function StockPage() {
                     <p className="text-xs text-slate-600">{item.customer} • {item.date}</p>
                   </div>
                   <div className="flex gap-2">
-                    <button
+                    <button 
                       onClick={() => handleEdit(item, "out")}
                       className="p-2 hover:bg-red-200 rounded-lg transition-all text-red-700"
                       title="Edit"
                     >
                       <Edit2 size={16} />
                     </button>
-                    <button
+                    <button 
                       onClick={() => handleDelete(item.id, "out")}
                       className="p-2 hover:bg-red-200 rounded-lg transition-all text-red-700"
                       title="Delete"
@@ -715,6 +754,7 @@ export default function StockPage() {
                     </button>
                   </div>
                 </div>
+                {/* Changed: 3 column grid to show Weight, Rate (Purchase Rate), Total Amount */}
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div className="bg-white/60 p-2 rounded-lg">
                     <p className="text-xs text-slate-600">Weight</p>
@@ -722,10 +762,12 @@ export default function StockPage() {
                   </div>
                   <div className="bg-white/60 p-2 rounded-lg">
                     <p className="text-xs text-slate-600">Rate</p>
-                    <p className="font-semibold text-red-700">₨{parseFloat(item.rate).toFixed(2)}</p>
+                    <p className="font-semibold text-blue-700">
+                      {item.purchase_rate ? `₨${parseFloat(item.purchase_rate).toFixed(2)}` : '-'}
+                    </p>
                   </div>
                   <div className="bg-white/60 p-2 rounded-lg">
-                    <p className="text-xs text-slate-600">Amount</p>
+                    <p className="text-xs text-slate-600">Total Amount</p>
                     <p className="font-semibold text-red-700">₨{parseFloat(item.amount).toLocaleString()}</p>
                   </div>
                 </div>
