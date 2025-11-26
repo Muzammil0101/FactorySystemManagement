@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Store, Lock, Mail, Eye, EyeOff, Sparkles, ArrowRight } from "lucide-react";
+import { Store, Lock, Mail, Eye, EyeOff, Sparkles, ArrowRight, CheckCircle } from "lucide-react";
 
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -10,90 +10,85 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  
-const handleSubmit = async () => {
-  setError("");
-  setIsLoading(true);
+  const handleSubmit = async () => {
+    setError("");
+    setIsLoading(true);
 
-  try {
-    const res = await fetch("http://localhost:4000/api/auth/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email, password, ip: window.location.hostname })
-    });
+    try {
+      const res = await fetch("http://localhost:4000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email, password, ip: window.location.hostname })
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      setError(data.message || "Login failed");
-      setIsLoading(false);
-      return;
+      if (!res.ok) {
+        setError(data.message || "Login failed");
+        setIsLoading(false);
+        return;
+      }
+
+      // Success
+      localStorage.setItem("auth", "true");
+      localStorage.setItem("userEmail", data.user.email);
+      localStorage.setItem("loginTime", new Date().toISOString());
+
+      window.location.href = "/dashboard";
+
+    } catch (error) {
+      setError("Server error, try again");
     }
 
-    // Success
-    localStorage.setItem("auth", "true");
-    localStorage.setItem("userEmail", data.user.email);
-    localStorage.setItem("loginTime", new Date().toISOString());
-
-    window.location.href = "/dashboard";
-
-  } catch (error) {
-    setError("Server error, try again");
-  }
-
-  setIsLoading(false);
-};
+    setIsLoading(false);
+  };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Decorative Background Elements */}
-      <div className="absolute top-0 left-0 w-full h-full opacity-20">
-        <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-20 w-72 h-72 bg-indigo-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }}></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "2s" }}></div>
-      </div>
+    <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans text-slate-800">
+      
+      {/* Background Ambient Glows */}
+      <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
+      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-indigo-200/40 rounded-full blur-[120px] translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
 
       {/* Login Card */}
-      <div className="relative w-full max-w-md">
-        {/* Glow Effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-3xl blur-xl opacity-20"></div>
+      <div className="relative w-full max-w-md z-10">
         
-        <div className="relative bg-slate-800/80 backdrop-blur-xl rounded-3xl shadow-2xl border border-slate-700/50 p-8">
+        <div className="relative bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl shadow-slate-200/50 border border-slate-200 p-8">
+          
           {/* Logo Section */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-2xl shadow-lg">
-                <Store className="text-white" size={40} />
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-lg shadow-blue-200">
+                <Store className="text-white" size={32} />
               </div>
             </div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent mb-2">
+            <h1 className="text-3xl font-extrabold text-slate-800 mb-2 tracking-tight">
               Butt & Malik
             </h1>
-            <p className="text-slate-400 text-sm font-medium">Traders Management System</p>
+            <p className="text-slate-500 text-sm font-medium">Traders Management System</p>
           </div>
 
-          {/* Divider */}
-          <div className="h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent mb-8"></div>
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-100 rounded-xl p-3 flex items-center justify-center gap-2 text-red-600 text-sm font-medium animate-shake">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+              {error}
+            </div>
+          )}
 
           {/* Login Form */}
-          <div className="space-y-6">
-            {/* Error Message */}
-            {error && (
-              <div className="bg-red-500/10 border border-red-500/50 rounded-xl p-3 text-center">
-                <p className="text-red-400 text-sm font-medium">{error}</p>
-              </div>
-            )}
-
+          <div className="space-y-5">
+            
             {/* Email Input */}
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">
                 Email Address
               </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                  <Mail className="w-5 h-5 text-slate-400" />
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">
+                  <Mail size={18} />
                 </div>
                 <input
                   type="email"
@@ -101,19 +96,19 @@ const handleSubmit = async () => {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@buttmalik.com"
                   required
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-900/50 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:bg-slate-800/70 transition-all duration-300"
+                  className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium"
                 />
               </div>
             </div>
 
             {/* Password Input */}
             <div>
-              <label className="block text-sm font-semibold text-slate-300 mb-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">
                 Password
               </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                  <Lock className="w-5 h-5 text-slate-400" />
+              <div className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors">
+                  <Lock size={18} />
                 </div>
                 <input
                   type={showPassword ? "text" : "password"}
@@ -121,50 +116,44 @@ const handleSubmit = async () => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
-                  className="w-full pl-12 pr-12 py-3.5 bg-slate-900/50 border border-slate-700/50 rounded-xl text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/50 focus:bg-slate-800/70 transition-all duration-300"
+                  className="w-full pl-11 pr-12 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between text-sm">
+            {/* Options */}
+            <div className="flex items-center justify-between text-sm pt-1">
               <label className="flex items-center gap-2 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-slate-600 bg-slate-900/50 text-blue-500 focus:ring-2 focus:ring-blue-500/50"
-                />
-                <span className="text-slate-400 group-hover:text-slate-300 transition-colors">
-                  Remember me
-                </span>
+                <div className="relative flex items-center">
+                  <input type="checkbox" className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-slate-300 bg-white checked:border-blue-500 checked:bg-blue-500 transition-all" />
+                  <CheckCircle className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100" size={10} strokeWidth={4} />
+                </div>
+                <span className="text-slate-500 group-hover:text-slate-700 transition-colors font-medium">Remember me</span>
               </label>
-              <button
-                type="button"
-                className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
-              >
-                Forgot password?
+              <button type="button" className="text-blue-600 hover:text-blue-700 font-bold hover:underline decoration-2 underline-offset-2 transition-all">
+                Forgot Password?
               </button>
             </div>
 
-            {/* Login Button */}
+            {/* Submit Button */}
             <button
               onClick={handleSubmit}
               disabled={isLoading}
-              className="group relative w-full py-3.5 rounded-xl font-semibold text-white overflow-hidden transition-all duration-300 hover:scale-105 disabled:scale-100 disabled:opacity-70"
+              className="group relative w-full py-3.5 rounded-xl font-bold text-white shadow-lg shadow-blue-500/30 overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-blue-500/40 disabled:opacity-70 disabled:hover:scale-100"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-indigo-600 transition-transform duration-300 group-hover:scale-110"></div>
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 transition-transform duration-300 group-hover:scale-105"></div>
               <span className="relative flex items-center justify-center gap-2">
                 {isLoading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Signing in...
+                    <span className="tracking-wide">Authenticating...</span>
                   </>
                 ) : (
                   <>
@@ -177,24 +166,27 @@ const handleSubmit = async () => {
           </div>
 
           {/* Divider */}
-          <div className="h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent my-8"></div>
-
-          {/* Footer */}
-          <p className="text-center text-sm text-slate-400">
-            Protected by advanced security measures
-          </p>
-          
-          {/* Demo Credentials */}
-          <div className="mt-4 p-3 bg-slate-900/50 rounded-xl border border-slate-700/50">
-            <p className="text-xs text-slate-400 text-center mb-2 font-semibold">Demo Credentials:</p>
-            <p className="text-xs text-slate-300 text-center">Email: admin@buttmalik.com</p>
-            <p className="text-xs text-slate-300 text-center">Password: admin123</p>
+          <div className="my-8 flex items-center gap-4">
+            <div className="h-px bg-slate-200 flex-1"></div>
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Secure Access</span>
+            <div className="h-px bg-slate-200 flex-1"></div>
           </div>
+
+          {/* Demo Credentials */}
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/60 text-center">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Demo Credentials</p>
+            <div className="flex justify-center gap-6 text-sm text-slate-600 font-mono bg-white py-2 px-4 rounded-lg border border-slate-200 inline-block shadow-sm">
+              <span>admin@buttmalik.com</span>
+              <span className="text-slate-300">|</span>
+              <span>admin123</span>
+            </div>
+          </div>
+          
         </div>
 
-        {/* Bottom Text */}
-        <p className="text-center text-sm text-slate-500 mt-6">
-          © 2024 Butt & Malik Traders. All rights reserved.
+        {/* Footer */}
+        <p className="text-center text-xs font-medium text-slate-400 mt-6">
+          © {new Date().getFullYear()} Butt & Malik Traders. All rights reserved.
         </p>
       </div>
     </div>

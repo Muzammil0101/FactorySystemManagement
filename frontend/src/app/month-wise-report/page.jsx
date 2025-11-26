@@ -1,6 +1,20 @@
 "use client";
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, Plus, Edit2, Trash2, DollarSign, Package, Calendar, User, FileText } from "lucide-react";
+import { 
+  TrendingUp, 
+  TrendingDown, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  DollarSign, 
+  Package, 
+  Calendar, 
+  User, 
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  X
+} from "lucide-react";
 
 const API_URL = "http://localhost:4000/api";
 
@@ -16,6 +30,7 @@ export default function MallManagementPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [notification, setNotification] = useState(null);
 
   // Forms
   const [saleForm, setSaleForm] = useState({
@@ -24,7 +39,7 @@ export default function MallManagementPage() {
     weight: "",
     rate: "",
     amount: "",
-    customer: "" // Required by backend
+    customer: ""
   });
 
   const [purchaseForm, setPurchaseForm] = useState({
@@ -33,7 +48,7 @@ export default function MallManagementPage() {
     weight: "",
     rate: "",
     amount: "",
-    supplier: "" // Required by backend
+    supplier: ""
   });
 
   const [editingSale, setEditingSale] = useState(null);
@@ -55,6 +70,7 @@ export default function MallManagementPage() {
       ]);
     } catch (error) {
       console.error("Error fetching data:", error);
+      showNotification("Error loading data", "error");
     } finally {
       setLoading(false);
     }
@@ -82,6 +98,11 @@ export default function MallManagementPage() {
     const res = await fetch(`${API_URL}/customers`);
     const data = await res.json();
     setCustomers(Array.isArray(data) ? data : []);
+  };
+
+  const showNotification = (message, type = "success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
   };
 
   // --- FILTERING ---
@@ -127,19 +148,18 @@ export default function MallManagementPage() {
     setPurchaseForm(newForm);
   };
 
-  // Add/Update Sale (Stock Out)
   const addSale = async () => {
     if (!saleForm.date || !saleForm.detail || !saleForm.weight || !saleForm.rate || !saleForm.customer) {
-      alert("Please fill all fields including Customer!");
+      showNotification("Please fill all fields including Customer!", "error");
       return;
     }
 
     const payload = {
       date: saleForm.date,
-      description: saleForm.detail, // Map detail -> description
+      description: saleForm.detail,
       weight: saleForm.weight,
-      rate: saleForm.rate, // Sale Rate
-      purchase_rate: 0, // Default to 0 for Mall View
+      rate: saleForm.rate,
+      purchase_rate: 0,
       amount: saleForm.amount,
       customer: saleForm.customer
     };
@@ -169,21 +189,21 @@ export default function MallManagementPage() {
         customer: ""
       });
       setEditingSale(null);
+      showNotification(editingSale ? "Sale updated successfully" : "Sale added successfully", "success");
     } catch (error) {
-      alert(error.message);
+      showNotification(error.message, "error");
     }
   };
 
-  // Add/Update Purchase (Stock In)
   const addPurchase = async () => {
     if (!purchaseForm.date || !purchaseForm.detail || !purchaseForm.weight || !purchaseForm.rate || !purchaseForm.supplier) {
-      alert("Please fill all fields including Supplier!");
+      showNotification("Please fill all fields including Supplier!", "error");
       return;
     }
 
     const payload = {
       date: purchaseForm.date,
-      description: purchaseForm.detail, // Map detail -> description
+      description: purchaseForm.detail,
       weight: purchaseForm.weight,
       rate: purchaseForm.rate,
       amount: purchaseForm.amount,
@@ -215,8 +235,9 @@ export default function MallManagementPage() {
         supplier: ""
       });
       setEditingPurchase(null);
+      showNotification(editingPurchase ? "Purchase updated successfully" : "Purchase added successfully", "success");
     } catch (error) {
-      alert(error.message);
+      showNotification(error.message, "error");
     }
   };
 
@@ -225,8 +246,10 @@ export default function MallManagementPage() {
     try {
       await fetch(`${API_URL}/stock/stock-out/${id}`, { method: "DELETE" });
       await fetchSales();
+      showNotification("Sale deleted successfully", "success");
     } catch (error) {
       console.error(error);
+      showNotification("Failed to delete sale", "error");
     }
   };
 
@@ -235,15 +258,15 @@ export default function MallManagementPage() {
     try {
       await fetch(`${API_URL}/stock/stock-in/${id}`, { method: "DELETE" });
       await fetchPurchases();
+      showNotification("Purchase deleted successfully", "success");
     } catch (error) {
       console.error(error);
+      showNotification("Failed to delete purchase", "error");
     }
   };
 
   const editSale = (item) => {
-    // Recalculate amount based on Sale Rate to ensure consistency in Mall View
     const calculatedAmount = item.weight && item.rate ? (parseFloat(item.weight) * parseFloat(item.rate)).toFixed(0) : item.amount;
-
     setSaleForm({
       date: item.date,
       detail: item.description,
@@ -253,6 +276,7 @@ export default function MallManagementPage() {
       customer: item.customer
     });
     setEditingSale(item.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const editPurchase = (item) => {
@@ -265,397 +289,402 @@ export default function MallManagementPage() {
       supplier: item.supplier
     });
     setEditingPurchase(item.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // --- CALCULATIONS ---
-  // CHANGED: Explicitly calculate Sales Amount as Weight * Sale Rate
   const totalSales = filteredSales.reduce((sum, item) => sum + (parseFloat(item.weight || 0) * parseFloat(item.rate || 0)), 0);
-  
-  // Purchases use the stored amount (which is Weight * Cost Rate)
   const totalPurchases = filteredPurchases.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-  
   const profit = totalSales - totalPurchases;
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen p-6 pt-24">
-      {/* Header */}
-      <div className="text-center mb-8">
-        <div className="flex justify-center mb-4">
-          <div className="bg-gradient-to-br from-blue-500 to-purple-600 p-4 rounded-3xl shadow-lg">
-            <Package className="text-white" size={40} />
-          </div>
+    <div className="min-h-screen bg-slate-50 text-slate-800 p-6 pb-6 relative font-sans overflow-hidden">
+      
+      {/* Background Ambient Glows */}
+      <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-blue-200/40 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
+      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-indigo-200/40 rounded-full blur-[120px] translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
+
+      {/* Notification Toast */}
+      {notification && (
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-xl border border-white/40 transform transition-all duration-300 animate-slide-in ${
+          notification.type === "success" 
+            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+            : "bg-rose-50 text-rose-700 border-rose-200"
+        }`}>
+          {notification.type === "success" ? <CheckCircle size={20} className="text-emerald-500" /> : <AlertCircle size={20} className="text-rose-500" />}
+          <p className="font-bold text-sm">{notification.message}</p>
+          <button onClick={() => setNotification(null)} className="hover:bg-slate-200/50 p-1 rounded-lg transition-colors ml-2">
+            <X size={16} />
+          </button>
         </div>
-        <h1 className="text-4xl font-bold text-slate-800 mb-2">Mall Management</h1>
-        <p className="text-slate-600">{getMonthName(currentMonth)} - Sales & Purchase Detail</p>
+      )}
+
+      <div className="max-w-7xl mx-auto relative z-10">
         
-        {/* Month Selector */}
-        <div className="flex justify-center items-center gap-3 mt-4">
-          <Calendar className="text-slate-600" size={20} />
-          <input
-            type="month"
-            value={currentMonth}
-            onChange={(e) => setCurrentMonth(e.target.value)}
-            className="border border-slate-300 px-4 py-2 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-medium text-slate-700"
-          />
-        </div>
-      </div>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-end gap-6 mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-3">
+              <span className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-200 text-white">
+                <FileText size={24} />
+              </span>
+              Month Wise Report
+            </h1>
+            <p className="text-slate-500 mt-2 text-sm font-semibold ml-1">
+              {getMonthName(currentMonth)} - Sales & Purchase Detail
+            </p>
+          </div>
 
-      {/* Profit Summary */}
-      <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-3xl p-6 mb-8 shadow-xl text-white">
-        <div className="grid md:grid-cols-3 gap-6 text-center">
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
-            <p className="text-sm opacity-90 mb-2">Total Sales</p>
-            <p className="text-3xl font-bold">₨{totalSales.toLocaleString()}</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
-            <p className="text-sm opacity-90 mb-2">Total Purchases</p>
-            <p className="text-3xl font-bold">₨{totalPurchases.toLocaleString()}</p>
-          </div>
-          <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 border-2 border-white/30">
-            <p className="text-sm opacity-90 mb-2">Profit Alhamdulillah 🌟</p>
-            <p className="text-3xl font-bold">₨{profit.toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Side by Side Forms */}
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
-        {/* Sale Form (Stock Out) */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-4">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="text-white" size={24} />
-              <h3 className="text-xl font-bold text-white">
-                {editingSale ? "Edit Sale" : "Add New Sale"}
-              </h3>
-            </div>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Date</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={saleForm.date}
-                  onChange={handleSaleChange}
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Detail (Product)</label>
-                <input
-                  type="text"
-                  name="detail"
-                  value={saleForm.detail}
-                  onChange={handleSaleChange}
-                  placeholder="Product detail"
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                />
-              </div>
-            </div>
-            
-            {/* Customer Field - Required by Backend */}
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Customer</label>
+          {/* Month Filter */}
+          <div className="bg-white p-1.5 rounded-2xl shadow-md border border-slate-200 flex items-center gap-2">
+            <div className="relative group">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
               <input
-                type="text"
-                name="customer"
-                value={saleForm.customer}
-                onChange={handleSaleChange}
-                placeholder="Select or type customer"
-                list="customer-list"
-                className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
+                type="month"
+                value={currentMonth}
+                onChange={(e) => setCurrentMonth(e.target.value)}
+                className="pl-10 pr-4 py-2 bg-slate-50 border-none rounded-xl text-sm text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none font-medium"
               />
-              <datalist id="customer-list">
-                {customers.map(c => <option key={c.id} value={c.name} />)}
-              </datalist>
             </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Weight</label>
-                <input
-                  type="number"
-                  name="weight"
-                  value={saleForm.weight}
-                  onChange={handleSaleChange}
-                  placeholder="0"
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Rate (Sale)</label>
-                <input
-                  type="number"
-                  name="rate"
-                  value={saleForm.rate}
-                  onChange={handleSaleChange}
-                  placeholder="0"
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Amount</label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={saleForm.amount}
-                  readOnly
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm bg-slate-50 font-semibold"
-                />
-              </div>
-            </div>
-            <button
-              onClick={addSale}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
-            >
-              <Plus size={18} />
-              {editingSale ? "Update Sale" : "Add Sale"}
-            </button>
           </div>
         </div>
 
-        {/* Purchase Form (Stock In) */}
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-orange-500 to-red-600 p-4">
-            <div className="flex items-center gap-3">
-              <TrendingDown className="text-white" size={24} />
-              <h3 className="text-xl font-bold text-white">
-                {editingPurchase ? "Edit Purchase" : "Add New Purchase"}
-              </h3>
-            </div>
-          </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Date</label>
-                <input
-                  type="date"
-                  name="date"
-                  value={purchaseForm.date}
-                  onChange={handlePurchaseChange}
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Detail (Product)</label>
-                <input
-                  type="text"
-                  name="detail"
-                  value={purchaseForm.detail}
-                  onChange={handlePurchaseChange}
-                  placeholder="Product detail"
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                />
-              </div>
-            </div>
-
-            {/* Supplier Field - Required by Backend */}
+        {/* Profit Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-lg shadow-slate-200/50 flex items-center justify-between group hover:border-emerald-200 transition-all">
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Supplier</label>
-              <input
-                type="text"
-                name="supplier"
-                value={purchaseForm.supplier}
-                onChange={handlePurchaseChange}
-                placeholder="Select or type supplier"
-                list="supplier-list"
-                className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-              />
-              <datalist id="supplier-list">
-                {suppliers.map(s => <option key={s.id} value={s.name} />)}
-              </datalist>
+              <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-2">Total Sales</p>
+              <p className="text-2xl font-extrabold text-emerald-700">₨{totalSales.toLocaleString()}</p>
             </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Weight</label>
-                <input
-                  type="number"
-                  name="weight"
-                  value={purchaseForm.weight}
-                  onChange={handlePurchaseChange}
-                  placeholder="0"
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Rate</label>
-                <input
-                  type="number"
-                  name="rate"
-                  value={purchaseForm.rate}
-                  onChange={handlePurchaseChange}
-                  placeholder="0"
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Amount</label>
-                <input
-                  type="number"
-                  name="amount"
-                  value={purchaseForm.amount}
-                  readOnly
-                  className="w-full border border-slate-300 p-2 rounded-lg text-sm bg-slate-50 font-semibold"
-                />
-              </div>
+            <div className="p-3 bg-emerald-50 rounded-2xl text-emerald-600">
+              <TrendingUp size={24} />
             </div>
-            <button
-              onClick={addPurchase}
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all"
-            >
-              <Plus size={18} />
-              {editingPurchase ? "Update Purchase" : "Add Purchase"}
-            </button>
           </div>
-        </div>
-      </div>
 
-      {/* Sales Table - Full Width */}
-      <div className="mb-8">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-4">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+          <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-lg shadow-slate-200/50 flex items-center justify-between group hover:border-orange-200 transition-all">
+            <div>
+              <p className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-2">Total Purchases</p>
+              <p className="text-2xl font-extrabold text-orange-700">₨{totalPurchases.toLocaleString()}</p>
+            </div>
+            <div className="p-3 bg-orange-50 rounded-2xl text-orange-600">
+              <TrendingDown size={24} />
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl shadow-slate-900/20 flex items-center justify-between relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
+            <div className="relative z-10">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Net Profit</p>
+              <p className={`text-3xl font-extrabold ${profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>₨{profit.toLocaleString()}</p>
+            </div>
+            <div className="p-3 bg-white/10 rounded-2xl text-white relative z-10">
               <DollarSign size={24} />
-              Sale Mall - {getMonthName(currentMonth)}
+            </div>
+          </div>
+        </div>
+
+        {/* Side by Side Forms */}
+        <div className="grid lg:grid-cols-2 gap-8 mb-10">
+          
+          {/* Sale Form (Green) */}
+          <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/50">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500"></div>
+            <div className="bg-slate-50/80 p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-xl text-emerald-600">
+                  <TrendingUp size={20} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">{editingSale ? "Edit Sale" : "New Sale"}</h3>
+              </div>
+              {editingSale && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded border border-amber-200 font-bold">EDITING</span>}
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={saleForm.date}
+                    onChange={handleSaleChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Detail</label>
+                  <input
+                    type="text"
+                    name="detail"
+                    value={saleForm.detail}
+                    onChange={handleSaleChange}
+                    placeholder="Product..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all font-medium"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Customer</label>
+                <input
+                  type="text"
+                  name="customer"
+                  value={saleForm.customer}
+                  onChange={handleSaleChange}
+                  placeholder="Search customer..."
+                  list="customer-list"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none transition-all font-medium"
+                />
+                <datalist id="customer-list">
+                  {customers.map(c => <option key={c.id} value={c.name} />)}
+                </datalist>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Weight</label>
+                  <input
+                    type="number"
+                    name="weight"
+                    value={saleForm.weight}
+                    onChange={handleSaleChange}
+                    placeholder="0"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500/20 outline-none text-right font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Rate</label>
+                  <input
+                    type="number"
+                    name="rate"
+                    value={saleForm.rate}
+                    onChange={handleSaleChange}
+                    placeholder="0"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-emerald-500/20 outline-none text-right font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-1.5 block">Amount</label>
+                  <input
+                    type="number"
+                    name="amount"
+                    value={saleForm.amount}
+                    readOnly
+                    className="w-full bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2.5 text-sm text-emerald-700 font-bold text-right outline-none cursor-default"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={addSale}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-200 transition-all mt-2 flex items-center justify-center gap-2"
+              >
+                <Plus size={16} /> {editingSale ? "Update Sale" : "Add Sale"}
+              </button>
+            </div>
+          </div>
+
+          {/* Purchase Form (Orange) */}
+          <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-xl shadow-slate-200/50 relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-red-500"></div>
+            <div className="bg-slate-50/80 p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-xl text-orange-600">
+                  <TrendingDown size={20} />
+                </div>
+                <h3 className="text-lg font-bold text-slate-800">{editingPurchase ? "Edit Purchase" : "New Purchase"}</h3>
+              </div>
+              {editingPurchase && <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-1 rounded border border-amber-200 font-bold">EDITING</span>}
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={purchaseForm.date}
+                    onChange={handlePurchaseChange}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Detail</label>
+                  <input
+                    type="text"
+                    name="detail"
+                    value={purchaseForm.detail}
+                    onChange={handlePurchaseChange}
+                    placeholder="Product..."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-medium"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Supplier</label>
+                <input
+                  type="text"
+                  name="supplier"
+                  value={purchaseForm.supplier}
+                  onChange={handlePurchaseChange}
+                  placeholder="Search supplier..."
+                  list="supplier-list"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none transition-all font-medium"
+                />
+                <datalist id="supplier-list">
+                  {suppliers.map(s => <option key={s.id} value={s.name} />)}
+                </datalist>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Weight</label>
+                  <input
+                    type="number"
+                    name="weight"
+                    value={purchaseForm.weight}
+                    onChange={handlePurchaseChange}
+                    placeholder="0"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-500/20 outline-none text-right font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Rate</label>
+                  <input
+                    type="number"
+                    name="rate"
+                    value={purchaseForm.rate}
+                    onChange={handlePurchaseChange}
+                    placeholder="0"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:ring-2 focus:ring-orange-500/20 outline-none text-right font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-orange-600 uppercase tracking-wider mb-1.5 block">Amount</label>
+                  <input
+                    type="number"
+                    name="amount"
+                    value={purchaseForm.amount}
+                    readOnly
+                    className="w-full bg-orange-50 border border-orange-100 rounded-xl px-3 py-2.5 text-sm text-orange-700 font-bold text-right outline-none cursor-default"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={addPurchase}
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-200 transition-all mt-2 flex items-center justify-center gap-2"
+              >
+                <Plus size={16} /> {editingPurchase ? "Update Purchase" : "Add Purchase"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Sales Table */}
+        <div className="bg-white border border-slate-100 rounded-3xl shadow-xl overflow-hidden mb-8">
+          <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <TrendingUp size={18} className="text-emerald-600" /> 
+              Sales Records (Mall)
             </h3>
+            <span className="text-xs text-slate-500 font-medium">{getMonthName(currentMonth)}</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-100 border-b-2 border-slate-300">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs border-b border-slate-100">
                 <tr>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Sr</th>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Date</th>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Detail</th>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Customer</th>
-                  <th className="p-3 text-right text-xs font-bold text-slate-700">Weight</th>
-                  <th className="p-3 text-right text-xs font-bold text-slate-700">Rate</th>
-                  <th className="p-3 text-right text-xs font-bold text-slate-700">Amount</th>
-                  <th className="p-3 text-center text-xs font-bold text-slate-700">Actions</th>
+                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4">Detail</th>
+                  <th className="px-6 py-4">Customer</th>
+                  <th className="px-6 py-4 text-right">Weight</th>
+                  <th className="px-6 py-4 text-right">Rate</th>
+                  <th className="px-6 py-4 text-right">Amount</th>
+                  <th className="px-6 py-4 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredSales.map((item, idx) => (
-                  <tr key={item.id} className="hover:bg-green-50 transition-colors">
-                    <td className="p-3 text-sm text-slate-700">{idx + 1}</td>
-                    <td className="p-3 text-sm text-slate-700">{item.date}</td>
-                    <td className="p-3 text-sm text-slate-700">{item.description}</td>
-                    <td className="p-3 text-sm text-slate-700">{item.customer}</td>
-                    <td className="p-3 text-sm text-slate-700 text-right">{item.weight}</td>
-                    <td className="p-3 text-sm text-slate-700 text-right">{item.rate}</td>
-                    {/* CHANGED: Calculate Amount dynamically as Weight * Sale Rate */}
-                    <td className="p-3 text-sm font-semibold text-green-700 text-right">
+              <tbody className="divide-y divide-slate-50">
+                {filteredSales.map((item) => (
+                  <tr key={item.id} className="hover:bg-emerald-50/30 transition-colors group">
+                    <td className="px-6 py-4 font-medium text-slate-600">{item.date}</td>
+                    <td className="px-6 py-4 font-medium text-slate-800">{item.description}</td>
+                    <td className="px-6 py-4 text-slate-600">{item.customer}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">{item.weight}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">{item.rate}</td>
+                    <td className="px-6 py-4 text-right font-bold text-emerald-600">
                       ₨{(parseFloat(item.weight || 0) * parseFloat(item.rate || 0)).toLocaleString()}
                     </td>
-                    <td className="p-3 text-center">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          onClick={() => editSale(item)}
-                          className="p-1 hover:bg-green-100 rounded transition-colors text-green-700"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => deleteSale(item.id)}
-                          className="p-1 hover:bg-red-100 rounded transition-colors text-red-700"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => editSale(item)} className="p-1.5 hover:bg-emerald-100 text-emerald-600 rounded-lg transition-colors"><Edit2 size={14} /></button>
+                        <button onClick={() => deleteSale(item.id)} className="p-1.5 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {filteredSales.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="p-6 text-center text-slate-500">No Sales found for this month</td>
-                  </tr>
-                )}
-                <tr className="bg-green-100 font-bold">
-                  <td colSpan="6" className="p-3 text-sm text-slate-800 text-right">Total Sale Mall:</td>
-                  <td className="p-3 text-sm text-green-700 text-right">
-                    ₨{totalSales.toLocaleString()}
-                  </td>
+                {filteredSales.length === 0 && <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-400 italic">No sales found for this month</td></tr>}
+              </tbody>
+              <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                <tr>
+                  <td colSpan="5" className="px-6 py-4 text-right text-slate-600 uppercase text-xs tracking-wider">Total Sales</td>
+                  <td className="px-6 py-4 text-right text-emerald-700">₨{totalSales.toLocaleString()}</td>
                   <td></td>
                 </tr>
-              </tbody>
+              </tfoot>
             </table>
           </div>
         </div>
-      </div>
 
-      {/* Purchase Table - Full Width */}
-      <div>
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-orange-500 to-red-600 p-4">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <Package size={24} />
-              Purchased Mall - {getMonthName(currentMonth)}
+        {/* Purchase Table */}
+        <div className="bg-white border border-slate-100 rounded-3xl shadow-xl overflow-hidden">
+          <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+              <TrendingDown size={18} className="text-orange-600" /> 
+              Purchase Records (Mall)
             </h3>
+            <span className="text-xs text-slate-500 font-medium">{getMonthName(currentMonth)}</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-slate-100 border-b-2 border-slate-300">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs border-b border-slate-100">
                 <tr>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Sr</th>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Date</th>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Detail</th>
-                  <th className="p-3 text-left text-xs font-bold text-slate-700">Supplier</th>
-                  <th className="p-3 text-right text-xs font-bold text-slate-700">Weight</th>
-                  <th className="p-3 text-right text-xs font-bold text-slate-700">Rate</th>
-                  <th className="p-3 text-right text-xs font-bold text-slate-700">Amount</th>
-                  <th className="p-3 text-center text-xs font-bold text-slate-700">Actions</th>
+                  <th className="px-6 py-4">Date</th>
+                  <th className="px-6 py-4">Detail</th>
+                  <th className="px-6 py-4">Supplier</th>
+                  <th className="px-6 py-4 text-right">Weight</th>
+                  <th className="px-6 py-4 text-right">Rate</th>
+                  <th className="px-6 py-4 text-right">Amount</th>
+                  <th className="px-6 py-4 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredPurchases.map((item, idx) => (
-                  <tr key={item.id} className="hover:bg-orange-50 transition-colors">
-                    <td className="p-3 text-sm text-slate-700">{idx + 1}</td>
-                    <td className="p-3 text-sm text-slate-700">{item.date}</td>
-                    <td className="p-3 text-sm text-slate-700">{item.description}</td>
-                    <td className="p-3 text-sm text-slate-700">{item.supplier}</td>
-                    <td className="p-3 text-sm text-slate-700 text-right">{item.weight}</td>
-                    <td className="p-3 text-sm text-slate-700 text-right">{item.rate}</td>
-                    <td className="p-3 text-sm font-semibold text-orange-700 text-right">
+              <tbody className="divide-y divide-slate-50">
+                {filteredPurchases.map((item) => (
+                  <tr key={item.id} className="hover:bg-orange-50/30 transition-colors group">
+                    <td className="px-6 py-4 font-medium text-slate-600">{item.date}</td>
+                    <td className="px-6 py-4 font-medium text-slate-800">{item.description}</td>
+                    <td className="px-6 py-4 text-slate-600">{item.supplier}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">{item.weight}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">{item.rate}</td>
+                    <td className="px-6 py-4 text-right font-bold text-orange-600">
                       ₨{parseFloat(item.amount).toLocaleString()}
                     </td>
-                    <td className="p-3 text-center">
-                      <div className="flex justify-center gap-2">
-                        <button
-                          onClick={() => editPurchase(item)}
-                          className="p-1 hover:bg-orange-100 rounded transition-colors text-orange-700"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => deletePurchase(item.id)}
-                          className="p-1 hover:bg-red-100 rounded transition-colors text-red-700"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                    <td className="px-6 py-4 text-center">
+                      <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => editPurchase(item)} className="p-1.5 hover:bg-orange-100 text-orange-600 rounded-lg transition-colors"><Edit2 size={14} /></button>
+                        <button onClick={() => deletePurchase(item.id)} className="p-1.5 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"><Trash2 size={14} /></button>
                       </div>
                     </td>
                   </tr>
                 ))}
-                {filteredPurchases.length === 0 && (
-                  <tr>
-                    <td colSpan="8" className="p-6 text-center text-slate-500">No Purchases found for this month</td>
-                  </tr>
-                )}
-                <tr className="bg-orange-100 font-bold">
-                  <td colSpan="6" className="p-3 text-sm text-slate-800 text-right">Total Purchase Mall:</td>
-                  <td className="p-3 text-sm text-orange-700 text-right">
-                    ₨{totalPurchases.toLocaleString()}
-                  </td>
+                {filteredPurchases.length === 0 && <tr><td colSpan="7" className="px-6 py-12 text-center text-slate-400 italic">No purchases found for this month</td></tr>}
+              </tbody>
+              <tfoot className="bg-slate-50 font-bold border-t border-slate-200">
+                <tr>
+                  <td colSpan="5" className="px-6 py-4 text-right text-slate-600 uppercase text-xs tracking-wider">Total Purchases</td>
+                  <td className="px-6 py-4 text-right text-orange-700">₨{totalPurchases.toLocaleString()}</td>
                   <td></td>
                 </tr>
-              </tbody>
+              </tfoot>
             </table>
           </div>
         </div>
+
       </div>
     </div>
   );
