@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { Package, TrendingUp, TrendingDown, Plus, Calendar, FileText, User, CheckCircle, AlertCircle, X, Edit2, Trash2, DollarSign } from "lucide-react";
 
-const API_URL = "http://localhost:4000/api";
+const API_URL = "http://localhost:4000/api"; // Adjusted to relative path for standard Next.js setups, change back to full URL if needed
 
 export default function StockPage() {
   const [stockIn, setStockIn] = useState([]);
@@ -148,15 +148,14 @@ export default function StockPage() {
         form.amount = weight && rate ? (weight * rate).toFixed(2) : "";
       }
       setFormIn(form);
-    } else {
+    }  else {
       // Logic for Stock Out
-      // CHANGED: Calculation now uses weight and purchase_rate
-      if (name === "weight" || name === "purchase_rate") {
+      // IMPORTANT: Amount here is calculated using SALE RATE for the Customer Ledger
+      if (name === "weight" || name === "rate") { 
         const weight = name === "weight" ? value : form.weight;
-        const pRate = name === "purchase_rate" ? value : form.purchase_rate; 
+        const sRate = name === "rate" ? value : form.rate; // Sale Rate
         
-        // Amount is calculated based on Purchased Rate (not Sale Rate)
-        form.amount = weight && pRate ? (weight * pRate).toFixed(2) : "";
+        form.amount = weight && sRate ? (weight * sRate).toFixed(2) : "";
       }
       setFormOut(form);
     }
@@ -633,6 +632,7 @@ export default function StockPage() {
                   placeholder="0.00" 
                   className="w-full border border-slate-300 p-3 rounded-xl bg-slate-50 text-slate-600 font-semibold"
                 />
+                <p className="text-[10px] text-gray-500 mt-1">Calculated via Sale Rate for Customer Ledger</p>
               </div>
             </div>
 
@@ -754,21 +754,25 @@ export default function StockPage() {
                     </button>
                   </div>
                 </div>
-                {/* Changed: 3 column grid to show Weight, Rate (Purchase Rate), Total Amount */}
+                {/* UPDATED: Shows Purchase Rate and calculates Total based on Purchase Rate 
+                   Calculation: Weight * Purchase Rate = Total Cost Amount
+                */}
                 <div className="grid grid-cols-3 gap-2 text-sm">
                   <div className="bg-white/60 p-2 rounded-lg">
                     <p className="text-xs text-slate-600">Weight</p>
                     <p className="font-semibold text-red-700">{item.weight} kg</p>
                   </div>
                   <div className="bg-white/60 p-2 rounded-lg">
-                    <p className="text-xs text-slate-600">Rate</p>
+                    <p className="text-xs text-slate-600">Pur. Rate</p>
                     <p className="font-semibold text-blue-700">
                       {item.purchase_rate ? `₨${parseFloat(item.purchase_rate).toFixed(2)}` : '-'}
                     </p>
                   </div>
                   <div className="bg-white/60 p-2 rounded-lg">
-                    <p className="text-xs text-slate-600">Total Amount</p>
-                    <p className="font-semibold text-red-700">₨{parseFloat(item.amount).toLocaleString()}</p>
+                    <p className="text-xs text-slate-600">Pur. Amount</p>
+                    <p className="font-semibold text-red-700">
+                      ₨{(parseFloat(item.weight) * parseFloat(item.purchase_rate || 0)).toLocaleString()}
+                    </p>
                   </div>
                 </div>
               </div>

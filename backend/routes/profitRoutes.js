@@ -3,9 +3,109 @@ import db from '../database/database.js';
 
 const router = express.Router();
 
-// ============ PROFIT & LOSS ROUTES ============
+// Initialize table for manual cash hand (Run once)
+try {
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS cash_hand (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      amount REAL DEFAULT 0
+    )
+  `).run();
+  
+  // Ensure the single row exists
+  db.prepare(`INSERT OR IGNORE INTO cash_hand (id, amount) VALUES (1, 0)`).run();
+} catch (error) {
+  console.error("Error initializing cash_hand table:", error);
+}
 
-// Overall P&L Summary
+// ============ PROFIT & LOSS / BALANCE SHEET ROUTES ============
+
+// Update Manual Cash In Hand
+router.post('/profit-loss/cash-in-hand', (req, res) => {
+  const { amount } = req.body;
+  try {
+    db.prepare('UPDATE cash_hand SET amount = ? WHERE id = 1').run(amount || 0);
+    res.json({ success: true, message: 'Cash in hand updated', amount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 1. Balance Sheet Calculation (UPDATED: Uses Purchase Rate for Stock Value)
+router.get('/profit-loss/balance-sheet', (req, res) => {
+  try {
+    // --- 1. Cash Flow (Cash In Hand) ---
+    const cashRecord = db.prepare('SELECT amount FROM cash_hand WHERE id = 1').get();
+    const cashInHand = cashRecord ? cashRecord.amount : 0;
+
+    // --- 2. Remaining Stock Amount (UPDATED) ---
+    // Logic: (Total Weight In - Total Weight Out) * Average PURCHASE Rate
+    
+    // Get total stock in weight AND amount (Total Cost)
+    const stockIn = db.prepare('SELECT SUM(weight) as weight, SUM(amount) as amount FROM stock_in').get();
+    
+    // Get total stock out weight (to calculate remaining weight)
+    const stockOut = db.prepare('SELECT SUM(weight) as weight FROM stock_out').get();
+
+    const totalInWeight = stockIn.weight || 0;
+    const totalInAmount = stockIn.amount || 0; // Total Cost of all purchases
+    
+    const totalOutWeight = stockOut.weight || 0;
+
+    // Calculate weighted average PURCHASE rate
+    // Formula: Total Cost / Total Weight Bought
+    const avgPurchaseRate = totalInWeight > 0 ? totalInAmount / totalInWeight : 0;
+    
+    const remainingWeight = totalInWeight - totalOutWeight;
+    
+    // Valuing remaining stock at the Purchase Rate (Cost Price)
+    // This gives a more conservative/realistic asset value than sale price
+    const stockValue = remainingWeight * avgPurchaseRate;
+
+    // --- 3. Customer Balances (Column 1 List) ---
+    // Get all customers and their current balance (Debit - Credit)
+    // Positive means they owe us (Asset)
+    const customers = db.prepare('SELECT name FROM customers').all();
+    const customerList = customers.map(c => {
+      const ledger = db.prepare('SELECT SUM(debit) as d, SUM(credit) as c FROM customer_ledger WHERE customer_name = ?').get(c.name);
+      const debit = ledger.d || 0;
+      const credit = ledger.c || 0;
+      return { 
+        name: c.name, 
+        balance: debit - credit 
+      };
+    }).filter(c => Math.abs(c.balance) > 0);
+
+    // --- 4. Supplier Balances (Column 2 List) ---
+    // Get all suppliers and their current balance (Credit - Debit)
+    // Positive means we owe them (Liability)
+    const suppliers = db.prepare('SELECT name FROM suppliers').all();
+    const supplierList = suppliers.map(s => {
+      const ledger = db.prepare('SELECT SUM(credit) as c, SUM(debit) as d FROM supplier_ledger WHERE supplier_name = ?').get(s.name);
+      const credit = ledger.c || 0;
+      const debit = ledger.d || 0;
+      return { 
+        name: s.name, 
+        balance: credit - debit 
+      };
+    }).filter(s => Math.abs(s.balance) > 0);
+
+    res.json({
+      cash_in_hand: parseFloat(cashInHand.toFixed(2)),
+      stock_value: parseFloat(stockValue.toFixed(2)),
+      stock_weight: parseFloat(remainingWeight.toFixed(2)),
+      avg_purchase_rate_used: parseFloat(avgPurchaseRate.toFixed(2)), 
+      customers: customerList,
+      suppliers: supplierList
+    });
+
+  } catch (error) {
+    console.error("Balance Sheet Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Overall P&L Summary (Standard)
 router.get('/profit-loss/summary', (req, res) => {
   try {
     const totalIn = db.prepare(`
@@ -170,7 +270,7 @@ router.get('/profit-loss/by-customer', (req, res) => {
   }
 });
 
-// Detailed P&L Report (Most Comprehensive)
+// Detailed P&L Report
 router.get('/profit-loss/detailed-report', (req, res) => {
   try {
     const inData = db.prepare(`
@@ -195,17 +295,6 @@ router.get('/profit-loss/detailed-report', (req, res) => {
     const totalRevenue = outData.total_amount || 0;
     const profitLoss = totalRevenue - totalCost;
     const margin = totalCost > 0 ? ((profitLoss / totalCost) * 100).toFixed(2) : 0;
-
-    const inventory = db.prepare(`
-      SELECT 
-        SUM(CASE WHEN description IN (SELECT description FROM stock_in) THEN weight ELSE 0 END) as total_in,
-        SUM(CASE WHEN description IN (SELECT description FROM stock_out) THEN weight ELSE 0 END) as total_out
-      FROM (
-        SELECT description, SUM(weight) as weight FROM stock_in GROUP BY description
-        UNION ALL
-        SELECT description, SUM(weight) as weight FROM stock_out GROUP BY description
-      )
-    `).get();
 
     res.json({
       summary: {
