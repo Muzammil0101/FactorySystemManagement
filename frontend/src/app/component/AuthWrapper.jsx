@@ -1,39 +1,56 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Sidebar from "./sidebar";
 import Navbar from "./Navbar";
 
 export default function AuthWrapper({ children }) {
-  const pathname = usePathname();
-  const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
-
-  const isLoginPage = pathname === "/login";
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [currentPath, setCurrentPath] = useState("");
 
   useEffect(() => {
-    const auth = localStorage.getItem("auth") === "true";
-    setLoggedIn(auth);
+    // Safe window check for Preview Environment to avoid Next.js build errors
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      setCurrentPath(path);
+      
+      const isLoginPage = path === "/login";
+      const auth = localStorage.getItem("auth") === "true";
+      setLoggedIn(auth);
 
-    if (!auth && !isLoginPage) router.push("/login");
-    if (auth && isLoginPage) router.push("/dashboard");
-  }, [pathname]);
+      if (!auth && !isLoginPage) {
+        window.location.href = "/login";
+      }
+      if (auth && isLoginPage) {
+        window.location.href = "/dashboard";
+      }
+    }
+  }, []);
 
-  // Show login page without layout
+  const isLoginPage = currentPath === "/login";
+
+  // Show login page without sidebar/navbar layout
   if (isLoginPage) {
-    return <div className="min-h-screen bg-gray-100">{children}</div>;
+    return <div className="min-h-screen bg-slate-50">{children}</div>;
   }
 
-  if (!loggedIn) return null;
+  // Prevent flashing of protected content before auth check
+  if (!loggedIn && !isLoginPage) return null;
 
   return (
-    <div className="flex h-screen bg-gray-100 overflow-hidden">
-      <Sidebar />
+    <div className="flex h-screen bg-slate-50 overflow-hidden">
+      
+      {/* Responsive Sidebar: Controlled by isSidebarOpen state */}
+      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-      <div className="flex-1 flex flex-col">
-        <Navbar />
-        <main className="flex-1 overflow-y-auto animate-slideInRight">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
+        
+        {/* Navbar: Contains the Menu Toggle button */}
+        <Navbar onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+        
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-50 scroll-smooth">
           {children}
         </main>
       </div>
