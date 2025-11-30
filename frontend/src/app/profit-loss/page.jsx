@@ -17,7 +17,8 @@ import {
   Filter, 
   RefreshCcw,
   DollarSign,
-  PieChart
+  PieChart,
+  CheckCircle // Added missing import
 } from 'lucide-react';
 
 const API_BASE = 'http://localhost:4000/api';
