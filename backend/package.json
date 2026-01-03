@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
+  "bin": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "build:bin": "pkg . --targets node18-win-x64,node18-macos-x64,node18-linux-x64 --out-path ../frontend/src-tauri/binaries"
+    "build:cjs": "babel . --out-dir dist-cjs --ignore node_modules,dist,dist-cjs",
+    "build:bin": "npm rebuild better-sqlite3 --target=18.5.0 --target_arch=arm64 && npm run build:cjs && node -e \"const fs=require('fs'); const pkg=require('./package.json'); pkg.type='commonjs'; delete pkg.scripts; fs.writeFileSync('dist-cjs/package.json', JSON.stringify(pkg, null, 2));\" && cd dist-cjs && pkg . --targets node18-macos-arm64 --out-path ../../frontend/resources/bin && cp ../node_modules/better-sqlite3/build/Release/better_sqlite3.node ../../frontend/resources/bin/",
+    "lint": "eslint"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +24,10 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@babel/cli": "^7.28.3",
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "babel-plugin-transform-import-meta": "^2.3.3",
     "electron-rebuild": "^3.2.9",
     "nodemon": "^3.1.10",
     "pkg": "^5.8.1"
