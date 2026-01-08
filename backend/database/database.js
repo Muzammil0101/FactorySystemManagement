@@ -234,6 +234,21 @@ const dbFolder = isPackaged ? path.dirname(process.execPath) : dbDirname;
 const dbPath = path.join(dbFolder, 'facsys.db');
 const db = new Database(dbPath);
 
+// Enable WAL mode for better concurrency
+db.pragma('journal_mode = WAL');
+
+// Helper to log system actions
+export const logSystemAction = (action, details, email = 'system', ip = 'localhost') => {
+  try {
+    db.prepare(`
+      INSERT INTO system_logs (action, details, user_email, ip_address)
+      VALUES (?, ?, ?, ?)
+    `).run(action, details, email, ip);
+  } catch (err) {
+    console.error("Failed to log system action:", err);
+  }
+};
+
 // Helper function to add column if missing
 function addColumnIfNotExists(table, column, type) {
   try {
@@ -277,6 +292,18 @@ function init() {
       email TEXT,
       login_time TEXT,
       ip_address TEXT
+    )
+  `).run();
+
+  // SYSTEM LOGS (Security Audit)
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS system_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT NOT NULL,
+      details TEXT,
+      user_email TEXT,
+      ip_address TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
 

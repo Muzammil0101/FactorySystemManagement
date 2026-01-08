@@ -47,16 +47,16 @@ const LoginPage = () => {
 
   return (
     <div className="min-h-screen w-full bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden font-sans text-slate-800">
-      
+
       {/* Background Ambient Glows */}
       <div className="absolute top-0 left-0 w-[600px] h-[600px] bg-blue-200/40 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
       <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-indigo-200/40 rounded-full blur-[120px] translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
 
       {/* Login Card */}
       <div className="relative w-full max-w-md z-10">
-        
+
         <div className="relative bg-white/80 backdrop-blur-xl rounded-3xl shadow-2xl shadow-slate-200/50 border border-slate-200 p-8">
-          
+
           {/* Logo Section */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
@@ -79,8 +79,8 @@ const LoginPage = () => {
           )}
 
           {/* Login Form */}
-          <div className="space-y-5">
-            
+          <form className="space-y-5" onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+
             {/* Email Input */}
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">
@@ -144,7 +144,7 @@ const LoginPage = () => {
 
             {/* Submit Button */}
             <button
-              onClick={handleSubmit}
+              type="submit"
               disabled={isLoading}
               className="group relative w-full py-3.5 rounded-xl font-bold text-white shadow-lg shadow-blue-500/30 overflow-hidden transition-all duration-300 hover:scale-[1.02] hover:shadow-blue-500/40 disabled:opacity-70 disabled:hover:scale-100"
             >
@@ -163,7 +163,7 @@ const LoginPage = () => {
                 )}
               </span>
             </button>
-          </div>
+          </form>
 
           {/* Divider */}
           <div className="my-8 flex items-center gap-4">
@@ -181,7 +181,7 @@ const LoginPage = () => {
               <span>admin123</span>
             </div>
           </div>
-          
+
         </div>
 
         {/* Footer */}

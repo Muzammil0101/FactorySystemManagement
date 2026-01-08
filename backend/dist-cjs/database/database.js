@@ -3,7 +3,7 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.default = void 0;
+exports.logSystemAction = exports.default = void 0;
 var _path = _interopRequireDefault(require("path"));
 var _url = require("url");
 var _betterSqlite = _interopRequireDefault(require("better-sqlite3"));
@@ -238,7 +238,23 @@ const dbFolder = isPackaged ? _path.default.dirname(process.execPath) : dbDirnam
 const dbPath = _path.default.join(dbFolder, 'facsys.db');
 const db = new _betterSqlite.default(dbPath);
 
+// Enable WAL mode for better concurrency
+db.pragma('journal_mode = WAL');
+
+// Helper to log system actions
+const logSystemAction = (action, details, email = 'system', ip = 'localhost') => {
+  try {
+    db.prepare(`
+      INSERT INTO system_logs (action, details, user_email, ip_address)
+      VALUES (?, ?, ?, ?)
+    `).run(action, details, email, ip);
+  } catch (err) {
+    console.error("Failed to log system action:", err);
+  }
+};
+
 // Helper function to add column if missing
+exports.logSystemAction = logSystemAction;
 function addColumnIfNotExists(table, column, type) {
   try {
     const columns = db.prepare(`PRAGMA table_info(${table})`).all();
@@ -276,6 +292,18 @@ function init() {
       email TEXT,
       login_time TEXT,
       ip_address TEXT
+    )
+  `).run();
+
+  // SYSTEM LOGS (Security Audit)
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS system_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      action TEXT NOT NULL,
+      details TEXT,
+      user_email TEXT,
+      ip_address TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )
   `).run();
 
