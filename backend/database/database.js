@@ -230,7 +230,7 @@ const dbFilename = fileURLToPath(import.meta.url);
 const dbDirname = path.dirname(dbFilename);
 
 const isPackaged = typeof process.pkg !== 'undefined';
-const dbFolder = isPackaged ? path.dirname(process.execPath) : dbDirname;
+const dbFolder = process.env.USER_DATA_PATH || (isPackaged ? path.dirname(process.execPath) : dbDirname);
 const dbPath = path.join(dbFolder, 'facsys.db');
 const db = new Database(dbPath);
 

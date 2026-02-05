@@ -5,14 +5,14 @@ import cron from 'node-cron';
 import { fileURLToPath } from 'url';
 
 // Fix __dirname for ES modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentFilename = fileURLToPath(import.meta.url);
+const currentDirname = path.dirname(currentFilename);
 
 
 
 const isPackaged = typeof process.pkg !== 'undefined';
 // If packaged, run relative to the executable. If not, run relative to this file's parent (backend root)
-const rootDir = isPackaged ? path.dirname(process.execPath) : path.join(__dirname, '..');
+const rootDir = process.env.USER_DATA_PATH || (isPackaged ? path.dirname(process.execPath) : path.join(currentDirname, '..'));
 
 const dbPath = path.join(rootDir, 'facsys.db');
 const backupDir = path.join(rootDir, 'backups');
@@ -22,16 +22,19 @@ if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
 }
 
+import db from '../database/database.js';
+
 // Function to create a backup
-export const createBackup = () => {
+export const createBackup = async () => {
     try {
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const backupFile = `facsys_backup_${timestamp}.db`;
         const backupPath = path.join(backupDir, backupFile);
 
-        // Copy database file
-        fs.copyFileSync(dbPath, backupPath);
-        console.log(`✅ Backup created: ${backupFile}`);
+        // Use better-sqlite3 native backup API
+        console.log(`⏳ Starting backup to: ${backupPath}`);
+        await db.backup(backupPath);
+        console.log(`✅ Backup created successfully: ${backupFile}`);
 
         // Cleanup old backups (keep last 30)
         cleanupOldBackups();
@@ -77,10 +80,16 @@ export const initBackupService = () => {
     });
 
     // Run one immediately on startup if no backups exist
-    const files = fs.readdirSync(backupDir);
-    if (files.length === 0) {
-        console.log('🆕 No backups found. Creating initial backup...');
-        createBackup();
+    try {
+        if (fs.existsSync(backupDir)) {
+            const files = fs.readdirSync(backupDir);
+            if (files.length === 0) {
+                console.log('🆕 No backups found. Creating initial backup...');
+                createBackup();
+            }
+        }
+    } catch (err) {
+        console.error("⚠️ Failed to check/create initial backup:", err);
     }
 };
 

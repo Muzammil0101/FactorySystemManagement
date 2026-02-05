@@ -234,7 +234,7 @@ function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e
 const dbFilename = (0, _url.fileURLToPath)(require('url').pathToFileURL(__filename).toString());
 const dbDirname = _path.default.dirname(dbFilename);
 const isPackaged = typeof process.pkg !== 'undefined';
-const dbFolder = isPackaged ? _path.default.dirname(process.execPath) : dbDirname;
+const dbFolder = process.env.USER_DATA_PATH || (isPackaged ? _path.default.dirname(process.execPath) : dbDirname);
 const dbPath = _path.default.join(dbFolder, 'facsys.db');
 const db = new _betterSqlite.default(dbPath);
 

@@ -11,7 +11,8 @@ import {
     AlertCircle,
     Lock,
     User,
-    Download
+    Download,
+    Upload
 } from "lucide-react";
 
 
@@ -114,6 +115,45 @@ export default function ProfilePage() {
         } catch (error) {
             console.error("Download error:", error);
             showNotification("Error downloading backup", "error");
+        }
+    };
+
+    // Restore Database Logic
+    const [restoreLoading, setRestoreLoading] = useState(false);
+
+    const handleRestoreBackup = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!confirm("⚠️ WARNING: Restoring a database will OVERWRITE all current data. This action cannot be undone. The application will need to be restarted. Do you want to proceed?")) {
+            event.target.value = null; // reset
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("backup", file);
+
+        setRestoreLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/backup/restore`, {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                showNotification("Database restored! Please restart the app.", "success");
+                alert("✅ RESTORE SUCCESSFUL\n\nPlease QUIT and RESTART the application to load the restored data.");
+            } else {
+                showNotification(data.message || "Restore failed", "error");
+            }
+        } catch (error) {
+            console.error("Restore error:", error);
+            showNotification("Error uploading backup file", "error");
+        } finally {
+            setRestoreLoading(false);
+            event.target.value = null; // reset input
         }
     };
 
@@ -242,6 +282,32 @@ export default function ProfilePage() {
                                         <Download size={16} className="text-slate-400 group-hover:text-purple-600 transition-colors" />
                                         Download Backup
                                     </button>
+                                </div>
+
+                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                    <h3 className="text-sm font-bold text-slate-700 mb-1">Restore Database</h3>
+                                    <p className="text-xs text-slate-500 mb-4">Restore data from a backup file. (Requires Restart)</p>
+
+                                    <div className="relative">
+                                        <input
+                                            type="file"
+                                            accept=".db"
+                                            onChange={handleRestoreBackup}
+                                            disabled={restoreLoading}
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        />
+                                        <button
+                                            disabled={restoreLoading}
+                                            className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 group"
+                                        >
+                                            {restoreLoading ? (
+                                                <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+                                            ) : (
+                                                <Upload size={16} className="text-slate-400 group-hover:text-purple-600 transition-colors" />
+                                            )}
+                                            {restoreLoading ? "Restoring..." : "Select Backup File"}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>

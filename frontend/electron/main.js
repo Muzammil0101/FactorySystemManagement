@@ -290,7 +290,11 @@ function startBackend() {
             cwd: cwd, // Optional
             stdio: ['ignore', 'pipe', 'pipe'],
             // specific env vars if needed
-            env: { ...process.env, PORT: '4000' }
+            env: {
+                ...process.env,
+                PORT: '4000',
+                USER_DATA_PATH: app.getPath('userData')
+            }
         });
 
         log(`Backend spawned. PID: ${backendProcess.pid}`);

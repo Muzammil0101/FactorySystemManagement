@@ -41,6 +41,8 @@
     "electron-is-dev": "^3.0.1",
     "electron-serve": "^3.0.0",
     "framer-motion": "^12.23.24",
+    "jspdf": "^4.0.0",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.553.0",
     "next": "16.0.1",
     "postcss": "^8.5.6",

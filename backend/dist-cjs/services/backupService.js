@@ -8,13 +8,14 @@ var _fs = _interopRequireDefault(require("fs"));
 var _path = _interopRequireDefault(require("path"));
 var _nodeCron = _interopRequireDefault(require("node-cron"));
 var _url = require("url");
+var _database = _interopRequireDefault(require("../database/database.js"));
 function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
 // Fix __dirname for ES modules
-const _filename = (0, _url.fileURLToPath)(require('url').pathToFileURL(_filename).toString());
-const _dirname = _path.default.dirname(_filename);
+const currentFilename = (0, _url.fileURLToPath)(require('url').pathToFileURL(__filename).toString());
+const currentDirname = _path.default.dirname(currentFilename);
 const isPackaged = typeof process.pkg !== 'undefined';
 // If packaged, run relative to the executable. If not, run relative to this file's parent (backend root)
-const rootDir = isPackaged ? _path.default.dirname(process.execPath) : _path.default.join(_dirname, '..');
+const rootDir = process.env.USER_DATA_PATH || (isPackaged ? _path.default.dirname(process.execPath) : _path.default.join(currentDirname, '..'));
 const dbPath = _path.default.join(rootDir, 'facsys.db');
 const backupDir = _path.default.join(rootDir, 'backups');
 
@@ -24,17 +25,17 @@ if (!_fs.default.existsSync(backupDir)) {
     recursive: true
   });
 }
-
 // Function to create a backup
-const createBackup = () => {
+const createBackup = async () => {
   try {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFile = `facsys_backup_${timestamp}.db`;
     const backupPath = _path.default.join(backupDir, backupFile);
 
-    // Copy database file
-    _fs.default.copyFileSync(dbPath, backupPath);
-    console.log(`✅ Backup created: ${backupFile}`);
+    // Use better-sqlite3 native backup API
+    console.log(`⏳ Starting backup to: ${backupPath}`);
+    await _database.default.backup(backupPath);
+    console.log(`✅ Backup created successfully: ${backupFile}`);
 
     // Cleanup old backups (keep last 30)
     cleanupOldBackups();
@@ -78,10 +79,16 @@ const initBackupService = () => {
   });
 
   // Run one immediately on startup if no backups exist
-  const files = _fs.default.readdirSync(backupDir);
-  if (files.length === 0) {
-    console.log('🆕 No backups found. Creating initial backup...');
-    createBackup();
+  try {
+    if (_fs.default.existsSync(backupDir)) {
+      const files = _fs.default.readdirSync(backupDir);
+      if (files.length === 0) {
+        console.log('🆕 No backups found. Creating initial backup...');
+        createBackup();
+      }
+    }
+  } catch (err) {
+    console.error("⚠️ Failed to check/create initial backup:", err);
   }
 };
 exports.initBackupService = initBackupService;

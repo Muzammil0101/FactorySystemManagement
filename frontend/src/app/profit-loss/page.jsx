@@ -1,37 +1,41 @@
 "use client";
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  Calendar, 
-  BarChart3, 
-  List, 
-  AlertCircle, 
-  X, 
-  Wallet, 
-  Package, 
-  ArrowRightLeft, 
-  Edit2, 
-  Check, 
-  X as CloseIcon, 
-  Filter, 
+import {
+  TrendingUp,
+  TrendingDown,
+  Calendar,
+  BarChart3,
+  List,
+  AlertCircle,
+  X,
+  Wallet,
+  Package,
+  ArrowRightLeft,
+  Edit2,
+  Check,
+  X as CloseIcon,
+  Filter,
   RefreshCcw,
   DollarSign,
   PieChart,
-  CheckCircle // Added missing import
+  CheckCircle,
+  Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const API_BASE = 'http://localhost:4000/api';
 
 export default function ProfitLossDashboard() {
   const [activeTab, setActiveTab] = useState('summary');
-  
+
   // Data States
   const [balanceSheet, setBalanceSheet] = useState(null);
   const [byCategory, setByCategory] = useState([]);
   const [bySupplier, setBySupplier] = useState([]);
   const [byCustomer, setByCustomer] = useState([]);
-  
+
   // UI States
   const [loading, setLoading] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -138,7 +142,7 @@ export default function ProfitLossDashboard() {
   const clearFilter = () => {
     setDateRange({ start: '', end: '' });
     setTimeout(() => {
-        window.location.reload(); 
+      window.location.reload();
     }, 100);
   };
 
@@ -149,11 +153,11 @@ export default function ProfitLossDashboard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ amount: parseFloat(manualCash) })
       });
-      
+
       if (!res.ok) throw new Error('Failed to update');
-      
+
       setIsEditingCash(false);
-      fetchBalanceSheet(); 
+      fetchBalanceSheet();
       showNotification('Cash in hand updated successfully', 'success');
     } catch (error) {
       console.error('Error updating cash:', error);
@@ -164,12 +168,12 @@ export default function ProfitLossDashboard() {
   const calculateTotals = () => {
     if (!balanceSheet) return { col1: 0, col2: 0, profit: 0 };
 
-    const col1Total = 
-      (balanceSheet.cash_in_hand || 0) + 
-      (balanceSheet.stock_value || 0) + 
+    const col1Total =
+      (balanceSheet.cash_in_hand || 0) +
+      (balanceSheet.stock_value || 0) +
       (balanceSheet.customers?.reduce((sum, c) => sum + c.balance, 0) || 0);
 
-    const col2Total = 
+    const col2Total =
       (balanceSheet.suppliers?.reduce((sum, s) => sum + s.balance, 0) || 0);
 
     return {
@@ -181,20 +185,97 @@ export default function ProfitLossDashboard() {
 
   const totals = calculateTotals();
 
+  // Export to Excel
+  const exportToExcel = () => {
+    if (!balanceSheet) return;
+
+    const workbook = XLSX.utils.book_new();
+
+    // 1. Summary Sheet
+    const summaryData = [
+      ["Profit & Loss Statement", `Period: ${dateRange.start || 'Start'} to ${dateRange.end || 'End'}`],
+      [],
+      ["Assets / Inflow", "", "Liabilities / Outflow", ""],
+      ["Item", "Amount (PKR)", "Item", "Amount (PKR)"],
+      ["Cash In Hand", balanceSheet.cash_in_hand, "Supplier Payables", totals.col2],
+      ["Stock Value", balanceSheet.stock_value, "", ""],
+      ["Customer Receivables", totals.col1 - (balanceSheet.cash_in_hand + balanceSheet.stock_value), "", ""],
+      ["TOTAL ASSETS", totals.col1, "TOTAL LIABILITIES", totals.col2],
+      [],
+      ["NET PROFIT", totals.profit]
+    ];
+    const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+    XLSX.utils.book_append_sheet(workbook, summarySheet, "Summary");
+
+    // 2. Category Sheet
+    if (byCategory.length > 0) {
+      const catSheet = XLSX.utils.json_to_sheet(byCategory);
+      XLSX.utils.book_append_sheet(workbook, catSheet, "Categories");
+    }
+
+    // 3. Supplier Sheet
+    if (bySupplier.length > 0) {
+      const supSheet = XLSX.utils.json_to_sheet(bySupplier);
+      XLSX.utils.book_append_sheet(workbook, supSheet, "Suppliers");
+    }
+
+    // 4. Customer Sheet
+    if (byCustomer.length > 0) {
+      const custSheet = XLSX.utils.json_to_sheet(byCustomer);
+      XLSX.utils.book_append_sheet(workbook, custSheet, "Customers");
+    }
+
+    XLSX.writeFile(workbook, `ProfitLoss_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showNotification("Excel exported successfully");
+  };
+
+  // Export to PDF
+  const exportToPDF = () => {
+    if (!balanceSheet) return;
+
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(18);
+    doc.text("Business Profit & Loss Statement", 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 26);
+    if (dateRange.start) doc.text(`Period: ${dateRange.start} to ${dateRange.end}`, 14, 32);
+
+    // Summary Table
+    autoTable(doc, {
+      startY: 40,
+      head: [['Metric', 'Amount (PKR)']],
+      body: [
+        ['Cash In Hand', balanceSheet.cash_in_hand?.toLocaleString()],
+        ['Stock Value', balanceSheet.stock_value?.toLocaleString()],
+        ['Customer Receivables', (totals.col1 - (balanceSheet.cash_in_hand + balanceSheet.stock_value))?.toLocaleString()],
+        ['TOTAL ASSETS', totals.col1?.toLocaleString()],
+        ['TOTAL LIABILITIES', totals.col2?.toLocaleString()],
+        ['NET PROFIT', totals.profit?.toLocaleString()]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [66, 66, 66] }
+    });
+
+    // Save
+    doc.save(`ProfitLoss_${new Date().toISOString().split('T')[0]}.pdf`);
+    showNotification("PDF exported successfully");
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 p-6 pb-6 relative font-sans overflow-hidden">
-      
+
       {/* Background Ambient Glows */}
       <div className="absolute top-0 left-0 w-[500px] h-[500px] bg-blue-200/40 rounded-full blur-[120px] -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
       <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-indigo-200/40 rounded-full blur-[120px] translate-x-1/2 translate-y-1/2 pointer-events-none"></div>
 
       {/* Notification Toast */}
       {notification && (
-        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-xl border border-white/40 transform transition-all duration-300 animate-slide-in ${
-          notification.type === "success" 
-            ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-            : "bg-rose-50 text-rose-700 border-rose-200"
-        }`}>
+        <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-xl border border-white/40 transform transition-all duration-300 animate-slide-in ${notification.type === "success"
+          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+          : "bg-rose-50 text-rose-700 border-rose-200"
+          }`}>
           {notification.type === "success" ? <CheckCircle className="text-emerald-500" size={20} /> : <AlertCircle className="text-rose-500" size={20} />}
           <p className="text-slate-800 font-medium text-sm">{notification.message}</p>
           <button onClick={() => setNotification(null)} className="text-slate-500 hover:bg-white/50 p-1 rounded-lg ml-2"><X size={16} /></button>
@@ -202,7 +283,7 @@ export default function ProfitLossDashboard() {
       )}
 
       <div className="max-w-7xl mx-auto relative z-10">
-        
+
         {/* Header Section */}
         <div className="flex flex-col xl:flex-row justify-between items-end gap-6 mb-8">
           <div>
@@ -225,24 +306,24 @@ export default function ProfitLossDashboard() {
             <form onSubmit={applyFilter} className="flex items-center gap-2">
               <div className="relative group">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={dateRange.start}
-                  onChange={(e) => setDateRange({...dateRange, start: e.target.value})}
+                  onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
                   className="pl-10 pr-3 py-2 bg-slate-50 border-none rounded-xl text-sm text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none font-medium"
                 />
               </div>
               <span className="text-slate-400 font-bold">-</span>
               <div className="relative group">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
-                <input 
-                  type="date" 
+                <input
+                  type="date"
                   value={dateRange.end}
-                  onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
+                  onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
                   className="pl-10 pr-3 py-2 bg-slate-50 border-none rounded-xl text-sm text-slate-600 focus:ring-2 focus:ring-blue-500/20 outline-none font-medium"
                 />
               </div>
-              <button 
+              <button
                 type="submit"
                 className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-xl transition-colors shadow-sm"
                 title="Apply Filter"
@@ -250,7 +331,7 @@ export default function ProfitLossDashboard() {
                 <Filter size={18} />
               </button>
               {(dateRange.start || dateRange.end) && (
-                <button 
+                <button
                   type="button"
                   onClick={clearFilter}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-600 p-2 rounded-xl transition-colors"
@@ -260,6 +341,22 @@ export default function ProfitLossDashboard() {
                 </button>
               )}
             </form>
+          </div>
+
+          {/* Export Buttons */}
+          <div className="flex gap-2">
+            <button
+              onClick={exportToExcel}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg hover:shadow-emerald-200 transition-all"
+            >
+              <Download size={16} /> Excel
+            </button>
+            <button
+              onClick={exportToPDF}
+              className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg hover:shadow-rose-200 transition-all"
+            >
+              <Download size={16} /> PDF
+            </button>
           </div>
         </div>
 
@@ -274,11 +371,10 @@ export default function ProfitLossDashboard() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-5 py-2.5 font-bold text-sm rounded-xl transition-all duration-200 ${
-                activeTab === tab.id
-                  ? 'bg-slate-800 text-white shadow-lg shadow-slate-200'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-              }`}
+              className={`flex items-center gap-2 px-5 py-2.5 font-bold text-sm rounded-xl transition-all duration-200 ${activeTab === tab.id
+                ? 'bg-slate-800 text-white shadow-lg shadow-slate-200'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                }`}
             >
               <tab.icon size={16} />
               {tab.label}
@@ -287,16 +383,16 @@ export default function ProfitLossDashboard() {
         </div>
 
         {loading && (
-            <div className="bg-white border border-slate-200 rounded-3xl shadow-xl p-12 text-center">
-                <div className="animate-spin mx-auto w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mb-4"></div>
-                <p className="text-slate-500 font-medium">Analyzing financial data...</p>
-            </div>
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-xl p-12 text-center">
+            <div className="animate-spin mx-auto w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mb-4"></div>
+            <p className="text-slate-500 font-medium">Analyzing financial data...</p>
+          </div>
         )}
 
         {/* --- MAIN SUMMARY VIEW (Balance Sheet Style) --- */}
         {!loading && activeTab === 'summary' && balanceSheet && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
+
             {/* COLUMN 1: Assets / Inflows */}
             <div className="bg-white border border-slate-100 rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col h-full">
               <div className="bg-slate-50/80 p-6 border-b border-slate-100 flex justify-between items-center">
@@ -311,7 +407,7 @@ export default function ProfitLossDashboard() {
                 </div>
                 <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded border border-emerald-200 uppercase tracking-wider">Asset</span>
               </div>
-              
+
               <div className="flex-grow">
                 <table className="w-full">
                   <tbody className="text-sm">
@@ -368,7 +464,7 @@ export default function ProfitLossDashboard() {
                         </td>
                       </tr>
                     ))}
-                    
+
                     {(!balanceSheet.customers || balanceSheet.customers.length === 0) && (
                       <tr><td colSpan="2" className="px-6 py-8 text-center text-slate-400 text-xs italic">No customer receivables</td></tr>
                     )}
@@ -415,7 +511,7 @@ export default function ProfitLossDashboard() {
                       </tr>
                     ))}
 
-                      {(!balanceSheet.suppliers || balanceSheet.suppliers.length === 0) && (
+                    {(!balanceSheet.suppliers || balanceSheet.suppliers.length === 0) && (
                       <tr><td colSpan="2" className="px-6 py-8 text-center text-slate-400 text-xs italic">No supplier payables</td></tr>
                     )}
                   </tbody>
@@ -433,21 +529,21 @@ export default function ProfitLossDashboard() {
             {/* FINAL PROFIT CALCULATION CARD */}
             <div className="lg:col-span-2">
               <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-8 shadow-2xl text-white flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
-                
+
                 {/* Background Pattern */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
 
                 <div className="relative z-10">
                   <h3 className="text-2xl font-bold">Net Business Value</h3>
                   <div className="flex items-center gap-2 mt-1 text-slate-400 text-sm">
-                    <Calendar size={14}/>
-                    {dateRange.start && dateRange.end 
-                        ? `Period: ${dateRange.start} to ${dateRange.end}` 
-                        : "Period: All Time Data"
+                    <Calendar size={14} />
+                    {dateRange.start && dateRange.end
+                      ? `Period: ${dateRange.start} to ${dateRange.end}`
+                      : "Period: All Time Data"
                     }
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-8 relative z-10">
                   <div className="text-right hidden md:block">
                     <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Calculation</div>
@@ -455,7 +551,7 @@ export default function ProfitLossDashboard() {
                       <span className="text-emerald-400">Ast</span> - <span className="text-rose-400">Liab</span>
                     </div>
                   </div>
-                  
+
                   <div className={`px-8 py-4 rounded-2xl font-mono text-4xl font-bold border ${totals.profit >= 0 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-rose-500/20 text-rose-400 border-rose-500/50'}`}>
                     ₨{totals.profit?.toLocaleString()}
                   </div>
@@ -498,7 +594,7 @@ export default function ProfitLossDashboard() {
                     </td>
                   </tr>
                 )) : (
-                    <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No data available</td></tr>
+                  <tr><td colSpan="5" className="px-6 py-12 text-center text-slate-400 italic">No data available</td></tr>
                 )}
               </tbody>
             </table>
@@ -507,67 +603,67 @@ export default function ProfitLossDashboard() {
 
         {/* --- SUPPLIER TAB --- */}
         {!loading && activeTab === 'supplier' && (
-           <div className="bg-white border border-slate-100 rounded-3xl shadow-xl overflow-hidden">
-           <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100">
-             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Package size={18} className="text-emerald-600" /> Supplier Analysis</h3>
-           </div>
-           <table className="w-full text-sm text-left">
-             <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
-               <tr>
-                 <th className="px-6 py-3">Supplier</th>
-                 <th className="px-6 py-3 text-right">Total Cost</th>
-                 <th className="px-6 py-3 text-right">Quantity</th>
-                 <th className="px-6 py-3 text-right">Avg Rate</th>
-               </tr>
-             </thead>
-             <tbody className="divide-y divide-slate-50">
-               {bySupplier.length > 0 ? bySupplier.map((item, idx) => (
-                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                   <td className="px-6 py-4 font-medium text-slate-800">{item.supplier}</td>
-                   <td className="px-6 py-4 text-right text-slate-600 font-medium">₨{item.total_cost?.toLocaleString()}</td>
-                   <td className="px-6 py-4 text-right text-slate-600">{item.total_quantity}</td>
-                   <td className="px-6 py-4 text-right text-slate-600">₨{item.avg_rate_per_unit}</td>
-                 </tr>
-               )) : (
-                <tr><td colSpan="4" className="px-6 py-12 text-center text-slate-400 italic">No data available</td></tr>
-               )}
-             </tbody>
-           </table>
-         </div>
+          <div className="bg-white border border-slate-100 rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2"><Package size={18} className="text-emerald-600" /> Supplier Analysis</h3>
+            </div>
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
+                <tr>
+                  <th className="px-6 py-3">Supplier</th>
+                  <th className="px-6 py-3 text-right">Total Cost</th>
+                  <th className="px-6 py-3 text-right">Quantity</th>
+                  <th className="px-6 py-3 text-right">Avg Rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {bySupplier.length > 0 ? bySupplier.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-slate-800">{item.supplier}</td>
+                    <td className="px-6 py-4 text-right text-slate-600 font-medium">₨{item.total_cost?.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">{item.total_quantity}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">₨{item.avg_rate_per_unit}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan="4" className="px-6 py-12 text-center text-slate-400 italic">No data available</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* --- CUSTOMER TAB --- */}
         {!loading && activeTab === 'customer' && (
-           <div className="bg-white border border-slate-100 rounded-3xl shadow-xl overflow-hidden">
-           <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100">
-             <h3 className="font-bold text-slate-800 flex items-center gap-2"><List size={18} className="text-blue-600" /> Customer Sales Report</h3>
-           </div>
-           <table className="w-full text-sm text-left">
-             <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
-               <tr>
-                 <th className="px-6 py-3">Customer</th>
-                 <th className="px-6 py-3 text-right">Total Revenue</th>
-                 <th className="px-6 py-3 text-right">Quantity</th>
-                 <th className="px-6 py-3 text-right">Avg Rate</th>
-               </tr>
-             </thead>
-             <tbody className="divide-y divide-slate-50">
-               {byCustomer.length > 0 ? byCustomer.map((item, idx) => (
-                 <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                   <td className="px-6 py-4 font-medium text-slate-800">{item.customer}</td>
-                   <td className="px-6 py-4 text-right text-emerald-600 font-medium">₨{item.total_revenue?.toLocaleString()}</td>
-                   <td className="px-6 py-4 text-right text-slate-600">{item.total_quantity}</td>
-                   <td className="px-6 py-4 text-right text-slate-600">₨{item.avg_rate_per_unit}</td>
-                 </tr>
-               )) : (
-                <tr><td colSpan="4" className="px-6 py-12 text-center text-slate-400 italic">No data available</td></tr>
-               )}
-             </tbody>
-           </table>
-         </div>
+          <div className="bg-white border border-slate-100 rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-slate-50/80 px-6 py-4 border-b border-slate-100">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2"><List size={18} className="text-blue-600" /> Customer Sales Report</h3>
+            </div>
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs">
+                <tr>
+                  <th className="px-6 py-3">Customer</th>
+                  <th className="px-6 py-3 text-right">Total Revenue</th>
+                  <th className="px-6 py-3 text-right">Quantity</th>
+                  <th className="px-6 py-3 text-right">Avg Rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {byCustomer.length > 0 ? byCustomer.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-slate-800">{item.customer}</td>
+                    <td className="px-6 py-4 text-right text-emerald-600 font-medium">₨{item.total_revenue?.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">{item.total_quantity}</td>
+                    <td className="px-6 py-4 text-right text-slate-600">₨{item.avg_rate_per_unit}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan="4" className="px-6 py-12 text-center text-slate-400 italic">No data available</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
 
       </div>
-    </div>
+    </div >
   );
 }
