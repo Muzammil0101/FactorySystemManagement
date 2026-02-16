@@ -10,7 +10,7 @@ function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e
 // 100 requests per 15 minutes per IP
 const globalLimiter = exports.globalLimiter = (0, _expressRateLimit.default)({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 2000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
